@@ -69,6 +69,7 @@ All arguments are optional:
 * `-ppm` specifies your Raspberry Pi's oscillator error in parts per million (ppm), see below.
 * `-raw` raw mode expects 44100HZ bitrate, 2 channels and PCM 16 bit.
 * `-onlystereo` PiFmAdv will transmit audio only on stereo subcarrier.
+* `-nords` will disable the RDS broadcast.
 
 By default the PS changes back and forth between `Pi-FmAdv` and a sequence number, starting at `00000000`. The PS changes around one time per second.
 
