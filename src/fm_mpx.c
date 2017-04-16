@@ -92,10 +92,10 @@ int fm_mpx_open(char *filename, size_t len, float cutoff_freq, float preemphasis
         SF_INFO sfinfo;
 
         if(raw) {
-			       sfinfo.format = SF_FORMAT_RAW | SF_FORMAT_PCM_16;
-	    	     sfinfo.samplerate = 44100;
-	    	     sfinfo.channels = 2;
-		    }
+            sfinfo.format = SF_FORMAT_RAW | SF_FORMAT_PCM_16;
+            sfinfo.samplerate = 44100;
+            sfinfo.channels = 2;
+        }
 
         // stdin or file on the filesystem?
         if(filename[0] == '-') {
@@ -265,45 +265,27 @@ int fm_mpx_get_samples(float *mpx_buffer, float *rds_buffer) {
         }
         // End of FIR filter
 
-        if (transmit_only_stereo) {                                                         // If set, PiFmAdv will transmit audio only on stereo subcarrier (38Khz). This is useful when testing FM receivers.
-            if (no_rds) {
-                mpx_buffer[i] =
-                    4.05 * carrier_38[phase_38] * out_mono;                                 // Unmodulated monophonic (or stereo-sum) signal on 38Khz (stereo) subcarrier
-            } else {
-                mpx_buffer[i] =
-                    rds_buffer[i] +                                                         // RDS data samples are currently in mpx_buffer
-                    4.05 * carrier_38[phase_38] * out_mono;                                 // Unmodulated monophonic (or stereo-sum) signal on 38Khz (stereo) subcarrier
+        if (channels>1) {
+            mpx_buffer[i] =									// Stereo ratio is 1 / 0.8 according to standarts
+                4.5 * out_mono +                           	// Unmodulated mono signal
+                3.6 * carrier_38[phase_38] * out_stereo +  	// Stereo difference signal
+                0.9 * carrier_19[phase_19];					// Stereo pilot tone
+
+            if (!no_rds) {
+                mpx_buffer[i] += rds_buffer[i];				// If RDS is enabled, add RDS signal to the output
             }
 
-            if(channels>1) {
-                mpx_buffer[i] +=
-                1.0 * carrier_19[phase_19];                                                 // Stereo pilot tone
-
-                phase_19++;
-                phase_38++;
-                if(phase_19 >= 12) phase_19 = 0;
-                if(phase_38 >= 6) phase_38 = 0;
-            }
+			phase_19++;
+            phase_38++;
+            if(phase_19 >= 12) phase_19 = 0;
+            if(phase_38 >= 6) phase_38 = 0;
         }
         else {
-            if (no_rds) {
-                mpx_buffer[i] =
-                    4.05 * out_mono;                                                        // Unmodulated monophonic (or stereo-sum) signal
-            } else {
-                mpx_buffer[i] =
-                    rds_buffer[i] +                                                         // RDS data samples are currently in mpx_buffer
-                    4.05 * out_mono;                                                        // Unmodulated monophonic (or stereo-sum) signal
-            }
+            mpx_buffer[i] = 								// Because we don't have to transmit on other subcarriers, we can boost the mono channel
+                9 * out_mono;                           	// Unmodulated mono signal
 
-            if(channels>1) {
-                mpx_buffer[i] +=
-                4.05 * carrier_38[phase_38] * out_stereo +                                  // Stereo difference signal
-                1.0 * carrier_19[phase_19];                                                 // Stereo pilot tone
-
-                phase_19++;
-                phase_38++;
-                if(phase_19 >= 12) phase_19 = 0;
-                if(phase_38 >= 6) phase_38 = 0;
+            if (!no_rds) {
+                mpx_buffer[i] += rds_buffer[i];				// If RDS is enabled, add RDS signal to the output
             }
         }
         audio_pos++;
