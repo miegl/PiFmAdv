@@ -496,7 +496,7 @@ int tx(uint32_t carrier_freq, char *audio_file, uint16_t pi, char *ps, char *rt,
                 count2++;
             }
             if(count == 1024) {
-                set_rds_ps("RPi-Live");
+                set_rds_ps("PiFmAdv");
                 count = 0;
             }
             count++;
@@ -559,12 +559,12 @@ int main(int argc, char **argv) {
     char *control_pipe = NULL;
     uint32_t carrier_freq = 107900000;
     char *ps = NULL;
-    char *rt = "PiFmAdv: live FM-RDS transmission from the RaspberryPi";
+    char *rt = "PiFmAdv: Advanced FM transmitter for the Raspberry Pi";
     uint16_t pi = 0x1234;
     float ppm = 0;
     float deviation = 75.0;
     float cutoff = CUTOFF_COMPLIANT;
-  	float preemphasis_cutoff = PREEMPHASIS_EU;
+    float preemphasis_cutoff = PREEMPHASIS_EU;
     int raw = 0;
     int pty = 15;
     int nords = 0;
@@ -602,25 +602,25 @@ int main(int argc, char **argv) {
             i++;
             ppm = atof(param);
         } else if(strcmp("-preemph", arg)==0 && param != NULL) {
-     			  i++;
-     			  if(strcmp("eu", param)==0) {
-     				    preemphasis_cutoff = PREEMPHASIS_EU;
-     			  } else if(strcmp("us", param)==0) {
-     				    preemphasis_cutoff = PREEMPHASIS_US;
-     			  }
-     			  else {
-     				    preemphasis_cutoff = atof(param);
-     			  }
+     	    i++;
+     		if(strcmp("eu", param)==0) {
+     	        preemphasis_cutoff = PREEMPHASIS_EU;
+     		} else if(strcmp("us", param)==0) {
+     			preemphasis_cutoff = PREEMPHASIS_US;
+     		}
+     		else {
+     		    preemphasis_cutoff = atof(param);
+     		}
         } else if(strcmp("-cutoff", arg)==0 && param != NULL) {
-     			  i++;
-     			  if(strcmp("compliant", param)==0) {
-     				    cutoff = CUTOFF_COMPLIANT;
-     			  } else if(strcmp("quality", param)==0) {
-     				    cutoff = CUTOFF_QUALITY;
-     			  }
-     			  else {
-     				    cutoff = atof(param);
-     			  }
+     		i++;
+     		if(strcmp("compliant", param)==0) {
+     			cutoff = CUTOFF_COMPLIANT;
+     		} else if(strcmp("quality", param)==0) {
+     			cutoff = CUTOFF_QUALITY;
+     		}
+     		else {
+     			cutoff = atof(param);
+     		}
         } else if(strcmp("-ctl", arg)==0 && param != NULL) {
             i++;
             control_pipe = param;
