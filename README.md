@@ -51,7 +51,7 @@ To test stereophonic audio, you can try the file `stereo_44100.wav` provided.
 The more general syntax for running Pi-FM-RDS is as follows:
 
 ```
-pi_fm_adv [-freq freq] [-audio file] [-ppm ppm_error] [-pi pi_code] [-ps ps_text] [-rt rt_text] [-pty program_type][-dev deviation] [-cutoff cutoff_freq] [-preemph preemphasis_mode] [-onlystereo]
+pi_fm_adv [-freq freq] [-audio file] [-ppm ppm_error] [-pi pi_code] [-ps ps_text] [-rt rt_text] [-pty program_type][-dev deviation] [-cutoff cutoff_freq] [-preemph preemphasis_mode] [-nords]
 ```
 
 All arguments are optional:
@@ -68,7 +68,6 @@ All arguments are optional:
 * `-ctl` specifies a named pipe (FIFO) to use as a control channel to change PS and RT at run-time (see below).
 * `-ppm` specifies your Raspberry Pi's oscillator error in parts per million (ppm), see below.
 * `-raw` raw mode expects 44100HZ bitrate, 2 channels and PCM 16 bit.
-* `-onlystereo` PiFmAdv will transmit audio only on stereo subcarrier.
 * `-nords` will disable the RDS broadcast.
 
 By default the PS changes back and forth between `Pi-FmAdv` and a sequence number, starting at `00000000`. The PS changes around one time per second.

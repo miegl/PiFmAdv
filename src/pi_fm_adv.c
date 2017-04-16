@@ -318,7 +318,7 @@ map_peripheral(uint32_t base, uint32_t len)
 #define DATA_SIZE 5000
 
 
-int tx(uint32_t carrier_freq, char *audio_file, uint16_t pi, char *ps, char *rt, float ppm, float deviation, float cutoff, float preemphasis_cutoff, char *control_pipe, int raw, int pty, int onlystereo, int nords) {
+int tx(uint32_t carrier_freq, char *audio_file, uint16_t pi, char *ps, char *rt, float ppm, float deviation, float cutoff, float preemphasis_cutoff, char *control_pipe, int raw, int pty, int nords) {
     // Catch all signals possible - it is vital we kill the DMA engine
     // on process exit!
     for (int i = 0; i < 64; i++) {
@@ -454,7 +454,7 @@ int tx(uint32_t carrier_freq, char *audio_file, uint16_t pi, char *ps, char *rt,
     int data_index = 0;
 
     // Initialize the baseband generator
-    if(fm_mpx_open(audio_file, DATA_SIZE, cutoff, preemphasis_cutoff, raw, onlystereo, nords) < 0) return 1;
+    if(fm_mpx_open(audio_file, DATA_SIZE, cutoff, preemphasis_cutoff, raw, nords) < 0) return 1;
 
     // Initialize the RDS modulator
     char myps[9] = {0};
@@ -567,7 +567,6 @@ int main(int argc, char **argv) {
   	float preemphasis_cutoff = PREEMPHASIS_EU;
     int raw = 0;
     int pty = 15;
-    int onlystereo = 0;
     int nords = 0;
 
 
@@ -628,9 +627,6 @@ int main(int argc, char **argv) {
         } else if(strcmp("-raw", arg)==0) { //expect raw input of 44.1khz, 2 channels, 16 bit pcm.
             i++;
             raw = 1;
-        } else if(strcmp("-onlystereo", arg)==0) {
-            i++;
-            onlystereo = 1;
         } else if(strcmp("-nords", arg)==0) {
             i++;
             nords = 1;
@@ -641,11 +637,11 @@ int main(int argc, char **argv) {
             fatal("Unrecognised argument: %s.\n"
             "Syntax: pi_fm_adv [-freq freq] [-audio file] [-ppm ppm_error] [-pi pi_code]\n"
             "                  [-ps ps_text] [-rt rt_text] [-pty program type] [-dev deviation] [-raw]\n"
-            "                  [-cutoff cutoff_freq] [-preemph preemphasis_mode] [-ctl control_pipe] [-onlystereo]\n", arg);
+            "                  [-cutoff cutoff_freq] [-preemph preemphasis_mode] [-ctl control_pipe] [-nords]\n", arg);
         }
     }
 
-    int errcode = tx(carrier_freq, audio_file, pi, ps, rt, ppm, deviation, cutoff, preemphasis_cutoff, control_pipe, raw, pty, onlystereo, nords);
+    int errcode = tx(carrier_freq, audio_file, pi, ps, rt, ppm, deviation, cutoff, preemphasis_cutoff, control_pipe, raw, pty, nords);
 
     terminate(errcode);
 }

@@ -67,7 +67,6 @@ float *last_buffer_val;
 float preemphasis_prewarp;
 float preemphasis_coefficient;
 
-int transmit_only_stereo;
 int no_rds;
 
 SNDFILE *inf;
@@ -84,7 +83,7 @@ float *alloc_empty_buffer(size_t length) {
 }
 
 
-int fm_mpx_open(char *filename, size_t len, float cutoff_freq, float preemphasis_corner_freq, int raw, int onlystereo, int nords) {
+int fm_mpx_open(char *filename, size_t len, float cutoff_freq, float preemphasis_corner_freq, int raw, int nords) {
     length = len;
 
     if(filename != NULL) {
@@ -152,12 +151,6 @@ int fm_mpx_open(char *filename, size_t len, float cutoff_freq, float preemphasis
                                                               // Hamming window
         }
         printf("Created low-pass FIR filter for audio channels, with cutoff at %.1f Hz\n", cutoff_freq);
-
-        // Set the "onlystereo" option, which will make PiFmAdv transmit audio only on stereo (38Khz) subcarrier. This is useful when testing FM receivers.
-        transmit_only_stereo = onlystereo;
-        if (transmit_only_stereo) {
-            printf("Transmitting audio only on stereo subcarrier\n");
-        }
 
         no_rds = nords;
         if (no_rds) {

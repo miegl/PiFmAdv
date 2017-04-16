@@ -21,6 +21,6 @@
     along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-extern int fm_mpx_open(char *filename, size_t len, float cutoff_freq, float preemphasis_corner_freq, int raw, int onlystereo, int nords);
+extern int fm_mpx_open(char *filename, size_t len, float cutoff_freq, float preemphasis_corner_freq, int raw int nords);
 extern int fm_mpx_get_samples(float *mpx_buffer, float *rds_buffer);
 extern int fm_mpx_close();
