@@ -126,7 +126,7 @@
 #error Unknown Raspberry Pi version (variable RASPI)
 #endif
 
-#define NUM_SAMPLES        228000           // WIP
+#define NUM_SAMPLES        12000 // Trying to prevent memory errors. /4 of 48kHz
 #define NUM_CBS            (NUM_SAMPLES * 2)
 
 #define BCM2708_DMA_NO_WIDE_BURSTS    (1<<26)
