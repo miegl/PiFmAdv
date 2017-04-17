@@ -126,7 +126,7 @@
 #error Unknown Raspberry Pi version (variable RASPI)
 #endif
 
-#define NUM_SAMPLES        50000
+#define NUM_SAMPLES        228000           // WIP
 #define NUM_CBS            (NUM_SAMPLES * 2)
 
 #define BCM2708_DMA_NO_WIDE_BURSTS    (1<<26)
@@ -321,7 +321,7 @@ map_peripheral(uint32_t base, uint32_t len)
 int tx(uint32_t carrier_freq, char *audio_file, uint16_t pi, char *ps, char *rt, float ppm, float deviation, float cutoff, float preemphasis_cutoff, char *control_pipe, int raw, int pty, int nords) {
     // Catch all signals possible - it is vital we kill the DMA engine
     // on process exit!
-    for (int i = 0; i < 64; i++) {
+    for (int i = 0; i < 35; i++) {
         struct sigaction sa;
 
         memset(&sa, 0, sizeof(sa));
