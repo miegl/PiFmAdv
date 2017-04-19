@@ -115,8 +115,8 @@ int get_rds_ct_group(uint16_t *blocks) {
     } else return 0;
 }
 
-/* Creates an RDS group. This generates sequences of the form 0A, 0A, 0A, 0A, 2A, etc.
-   The pattern is of length 5, the variable 'state' keeps track of where we are in the
+/* Creates an RDS group. This generates sequences of the form 0A, 0A, 0A, 0A, 2A, 2A, 2A, 2A, etc.
+   The pattern is of length 8, the variable 'state' keeps track of where we are in the
    pattern. 'ps_state' and 'rt_state' keep track of where we are in the PS (0A) sequence
    or RT (2A) sequence, respectively.
 */
@@ -128,15 +128,17 @@ void get_rds_group(int *buffer) {
 
     // Generate block content
     if(! get_rds_ct_group(blocks)) { // CT (clock time) has priority on other group types
-        if(state < 4) {
+        if(state <= 4) { // Type 0A groups
             blocks[1] = 0x0400 | ps_state;
+            if(rds_params.pty) blocks[1] |= rds_params.pty * 0x20;
             if(rds_params.ta) blocks[1] |= 0x0010;
-            blocks[2] = 0xCDCD;     // no AF
+            blocks[2] = 0xCDCD; // no AF
             blocks[3] = rds_params.ps[ps_state*2]<<8 | rds_params.ps[ps_state*2+1];
             ps_state++;
             if(ps_state >= 4) ps_state = 0;
-        } else { // state == 5
+        } else { // Type 2A groups
             blocks[1] = 0x2400 | rt_state;
+            if(rds_params.pty) blocks[1] |= rds_params.pty * 0x20;
             blocks[2] = rds_params.rt[rt_state*4+0]<<8 | rds_params.rt[rt_state*4+1];
             blocks[3] = rds_params.rt[rt_state*4+2]<<8 | rds_params.rt[rt_state*4+3];
             rt_state++;
@@ -144,42 +146,7 @@ void get_rds_group(int *buffer) {
         }
 
         state++;
-        if(state >= 5) state = 0;
-    }
-
-    switch(rds_params.pty) {
-        case 0: break;
-        case 1: blocks[1] = (blocks[1] & 0xFC1F) | 0x20; break;
-        case 2: blocks[1] = (blocks[1] & 0xFC1F) | 0x40; break;
-        case 3: blocks[1] = (blocks[1] & 0xFC1F) | 0x60; break;
-        case 4: blocks[1] = (blocks[1] & 0xFC1F) | 0x80; break;
-        case 5: blocks[1] = (blocks[1] & 0xFC1F) | 0xA0; break;
-        case 6: blocks[1] = (blocks[1] & 0xFC1F) | 0xC0; break;
-        case 7: blocks[1] = (blocks[1] & 0xFC1F) | 0xE0; break;
-        case 8: blocks[1] = (blocks[1] & 0xFC1F) | 0x100; break;
-        case 9: blocks[1] = (blocks[1] & 0xFC1F) | 0x120; break;
-        case 10: blocks[1] = (blocks[1] & 0xFC1F) | 0x140; break;
-        case 11: blocks[1] = (blocks[1] & 0xFC1F) | 0x160; break;
-        case 12: blocks[1] = (blocks[1] & 0xFC1F) | 0x180; break;
-        case 13: blocks[1] = (blocks[1] & 0xFC1F) | 0x1A0; break;
-        case 14: blocks[1] = (blocks[1] & 0xFC1F) | 0x1C0; break;
-        case 15: blocks[1] = (blocks[1] & 0xFC1F) | 0x1E0; break;
-        case 16: blocks[1] = (blocks[1] & 0xFC1F) | 0x200; break;
-        case 17: blocks[1] = (blocks[1] & 0xFC1F) | 0x220; break;
-        case 18: blocks[1] = (blocks[1] & 0xFC1F) | 0x240; break;
-        case 19: blocks[1] = (blocks[1] & 0xFC1F) | 0x260; break;
-        case 20: blocks[1] = (blocks[1] & 0xFC1F) | 0x280; break;
-        case 21: blocks[1] = (blocks[1] & 0xFC1F) | 0x2A0; break;
-        case 22: blocks[1] = (blocks[1] & 0xFC1F) | 0x2C0; break;
-        case 23: blocks[1] = (blocks[1] & 0xFC1F) | 0x2E0; break;
-        case 24: blocks[1] = (blocks[1] & 0xFC1F) | 0x300; break;
-        case 25: blocks[1] = (blocks[1] & 0xFC1F) | 0x320; break;
-        case 26: blocks[1] = (blocks[1] & 0xFC1F) | 0x340; break;
-        case 27: blocks[1] = (blocks[1] & 0xFC1F) | 0x360; break;
-        case 28: blocks[1] = (blocks[1] & 0xFC1F) | 0x380; break;
-        case 29: blocks[1] = (blocks[1] & 0xFC1F) | 0x3A0; break;
-        case 30: blocks[1] = (blocks[1] & 0xFC1F) | 0x3C0; break;
-        case 31: blocks[1] = (blocks[1] & 0xFC1F) | 0x3E0; break;
+        if(state >= 8) state = 0;
     }
 
     // Calculate the checkword for each block and emit the bits
