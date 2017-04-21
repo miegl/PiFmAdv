@@ -115,7 +115,7 @@ int get_rds_ct_group(uint16_t *blocks) {
     } else return 0;
 }
 
-/* Creates an RDS group. This generates sequences of the form 0A, 0A, 0A, 0A, 2A, 2A, 2A, 2A, etc.
+/* Creates an RDS group. This generates sequences of the form 0A, 0A, 0A, 0A, 2A, 2A, etc.
    The pattern is of length 8, the variable 'state' keeps track of where we are in the
    pattern. 'ps_state' and 'rt_state' keep track of where we are in the PS (0A) sequence
    or RT (2A) sequence, respectively.
@@ -146,7 +146,7 @@ void get_rds_group(int *buffer) {
         }
 
         state++;
-        if(state >= 8) state = 0;
+        if(state >= 6) state = 0;
     }
 
     // Calculate the checkword for each block and emit the bits
