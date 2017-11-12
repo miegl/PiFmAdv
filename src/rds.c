@@ -1,24 +1,8 @@
 /*
-    PiFmAdv - FM/RDS transmitter for the Raspberry Pi
+    PiFmAdv - Advanced FM transmitter for the Raspberry Pi
     Copyright (C) 2017 Miegl
 
     See https://github.com/Miegl/PiFmAdv
-
-    rds_wav.c is a test program that writes a RDS baseband signal to a WAV
-    file. It requires libsndfile.
-
-    This program is free software: you can redistribute it and/or modify
-    it under the terms of the GNU General Public License as published by
-    the Free Software Foundation, either version 3 of the License, or
-    (at your option) any later version.
-
-    This program is distributed in the hope that it will be useful,
-    but WITHOUT ANY WARRANTY; without even the implied warranty of
-    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-    GNU General Public License for more details.
-
-    You should have received a copy of the GNU General Public License
-    along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
 #include <stdint.h>
@@ -74,11 +58,10 @@ uint16_t crc(uint16_t block) {
             crc = crc ^ POLY;
         }
     }
-
     return crc;
 }
 
-/* Possibly generates a CT (clock time) group if the minute has just changed
+/* Generates a CT (clock time) group if the minute has just changed
    Returns 1 if the CT group was generated, 0 otherwise
 */
 int get_rds_ct_group(uint16_t *blocks) {
@@ -97,8 +80,8 @@ int get_rds_ct_group(uint16_t *blocks) {
 
         int l = utc->tm_mon <= 1 ? 1 : 0;
         int mjd = 14956 + utc->tm_mday +
-                        (int)((utc->tm_year - l) * 365.25) +
-                        (int)((utc->tm_mon + 2 + l*12) * 30.6001);
+                  (int)((utc->tm_year - l) * 365.25) +
+                  (int)((utc->tm_mon + 2 + l*12) * 30.6001);
 
         blocks[1] = 0x4400 | (mjd>>15);
         blocks[2] = (mjd<<1) | (utc->tm_hour>>4);
@@ -110,7 +93,6 @@ int get_rds_ct_group(uint16_t *blocks) {
         blocks[3] |= abs(offset);
         if(offset < 0) blocks[3] |= 0x20;
 
-        //printf("Generated CT: %04X %04X %04X\n", blocks[1], blocks[2], blocks[3]);
         return 1;
     } else return 0;
 }
@@ -128,10 +110,11 @@ void get_rds_group(int *buffer) {
 
     // Generate block content
     if(! get_rds_ct_group(blocks)) { // CT (clock time) has priority on other group types
-        if(state <= 4) { // Type 0A groups
-            blocks[1] = 0x0400 | ps_state;
-            if(rds_params.pty) blocks[1] |= rds_params.pty * 0x20;
-            if(rds_params.ta) blocks[1] |= 0x0010;
+        if(state < 4) { // Type 0A groups
+            blocks[1] = 0x0408 | ps_state;
+	        if((ps_state == 0) | (ps_state == 3)) blocks[1] |= 0x0004; // DI = 9 - Stereo & Dynamic PTY
+            if(rds_params.pty) blocks[1] |= rds_params.pty * 0x20; // PTY
+            if(rds_params.ta) blocks[1] |= 0x0010; // TA
             blocks[2] = 0xCDCD; // no AF
             blocks[3] = rds_params.ps[ps_state*2]<<8 | rds_params.ps[ps_state*2+1];
             ps_state++;
