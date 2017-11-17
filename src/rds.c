@@ -112,7 +112,7 @@ void get_rds_group(int *buffer) {
     if(! get_rds_ct_group(blocks)) { // CT (clock time) has priority on other group types
         if(state < 4) { // Type 0A groups
             blocks[1] = 0x0408 | ps_state;
-	        if(ps_state == 3) blocks[1] |= 0x0004; // DI = 1 - Stereo & Dynamic PTY
+	        if(ps_state == 3) blocks[1] |= 0x0004; // DI = 1 - Stereo
             if(rds_params.pty) blocks[1] |= rds_params.pty * 0x20; // PTY
             if(rds_params.ta) blocks[1] |= 0x0010; // TA
             blocks[2] = 0xCDCD; // no AF
