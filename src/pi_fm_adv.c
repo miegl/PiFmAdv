@@ -278,10 +278,10 @@ int tx(uint32_t carrier_freq, uint32_t divider, char *audio_file, int rds, uint1
 	int clktmp;
 	clktmp = clk_reg[CORECLK_CNTL];
 
-	clk_reg[CORECLK_CNTL] = (0xF0F&clktmp) | (0x5a<<24); // Clear run
-	udelay(100);
-	clk_reg[CORECLK_DIV]  = (0x5a<<24) | (2<<12);
-	udelay(100);
+	//clk_reg[CORECLK_CNTL] = (0xF0F&clktmp) | (0x5a<<24); // Clear run
+	//udelay(100);
+	//clk_reg[CORECLK_DIV]  = (0x5a<<24) | (2<<12);
+	//udelay(100);
 	clk_reg[CORECLK_CNTL] = (0x5a<<24) | (4); // Source = PLLA (4)
 	udelay(100);
 	clk_reg[CORECLK_CNTL] = (0x5a<<24) | (1<<4) | (4); // Run, Source = PLLA (4)
@@ -291,9 +291,11 @@ int tx(uint32_t carrier_freq, uint32_t divider, char *audio_file, int rds, uint1
 	clktmp = clk_reg[EMMCCLK_CNTL];
 	clk_reg[EMMCCLK_CNTL] = (0xF0F&clktmp) | (0x5a<<24); // Clear run
 	udelay(100);
-	clk_reg[EMMCCLK_CNTL] = (0x5a<<24) | (6); // Source = PLLD (6)
+	//clk_reg[EMMCCLK_DIV]  = (0x5a<<24) | (2<<12);
+        //udelay(100);
+	clk_reg[EMMCCLK_CNTL] = (0xF0F&clktmp) | (0x5a<<24) | (6); // Source = PLLD (6)
 	udelay(100);
-	clk_reg[EMMCCLK_CNTL] = (0x5a<<24) | (1<<4) | (6); // Run, Source = PLLD (6)
+	clk_reg[EMMCCLK_CNTL] = (0xF0F&clktmp) | (0x5a<<24) | (1<<4) | (6); // Run, Source = PLLD (6)
 	udelay(100);
 
     /*
@@ -304,7 +306,7 @@ int tx(uint32_t carrier_freq, uint32_t divider, char *audio_file, int rds, uint1
 
 	// Adjust PLLC frequency
 	clktmp = clk_reg[PLLC_CTRL];
-	clk_reg[PLLC_CTRL] = (0xF0F&clktmp) | (0x5a<<24); // Clear run
+	//clk_reg[PLLC_CTRL] = (0xF0F&clktmp) | (0x5a<<24); // Clear run
 	freq_ctl = (unsigned int)(((carrier_freq*divider)/19.2e6*((double)(1<<20))));
 	clk_reg[PLLC_CTRL] = (0x5a<<24) | (0x21<<12) | (freq_ctl>>20 ); // Integer part
 	freq_ctl&=0xFFFFF;
