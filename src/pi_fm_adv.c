@@ -238,7 +238,7 @@ static void *map_peripheral(uint32_t base, uint32_t len)
 
 
 
-int tx(uint32_t carrier_freq, uint32_t divider, char *audio_file, int rds, uint16_t pi, char *ps, char *rt, float ppm, float deviation, float cutoff, float preemphasis_cutoff, char *control_pipe, int pty, int power) {
+int tx(uint32_t carrier_freq, uint32_t divider, char *audio_file, int rds, uint16_t pi, char *ps, char *rt, float ppm, float deviation, float mpx, float cutoff, float preemphasis_cutoff, char *control_pipe, int pty, int power) {
 	// Catch only important signals
 	for (int i = 0; i < 25; i++) {
 		struct sigaction sa;
@@ -401,7 +401,7 @@ int tx(uint32_t carrier_freq, uint32_t divider, char *audio_file, int rds, uint1
 	int data_index = 0;
 
 	// Initialize the baseband generator
-	if(fm_mpx_open(audio_file, DATA_SIZE, cutoff, preemphasis_cutoff, rds) < 0) return 1;
+	if(fm_mpx_open(audio_file, DATA_SIZE, mpx, cutoff, preemphasis_cutoff, rds) < 0) return 1;
 
 	// Initialize the RDS modulator
 	char myps[9] = {0};
@@ -503,7 +503,7 @@ int main(int argc, char **argv) {
 	char *audio_file = NULL;
 	char *control_pipe = NULL;
 	uint32_t carrier_freq = 107900000;
-    int rds = 1;
+    	int rds = 1;
 	char *ps = NULL;
 	char *rt = "PiFmAdv: Advanced FM transmitter for the Raspberry Pi";
 	uint16_t pi = 0x1234;
@@ -514,6 +514,7 @@ int main(int argc, char **argv) {
 	int pty = 15;
 	int divc = 0;
 	int power = 7;
+	float mpx = 30;
 
 	// Parse command-line arguments
 	for(int i=1; i<argc; i++) {
@@ -564,6 +565,9 @@ int main(int argc, char **argv) {
 		} else if(strcmp("-cutoff", arg)==0 && param != NULL) {
 			i++;
 			cutoff = atof(param);
+		} else if(strcmp("-mpx", arg)==0 && param != NULL) {
+                        i++; 
+                        mpx = atof(param);
 		} else if(strcmp("-ctl", arg)==0 && param != NULL) {
 			i++;
 			control_pipe = param;
@@ -628,7 +632,7 @@ int main(int argc, char **argv) {
 
 	printf("Carrier: %3.2f Mhz, VCO: %4.1f MHz, Multiplier: %f, Divider: %d\n", carrier_freq/1e6, (double)carrier_freq * best_divider / 1e6, carrier_freq * best_divider * xtal_freq_recip, best_divider);
 
-	int errcode = tx(carrier_freq, best_divider, audio_file, rds, pi, ps, rt, ppm, deviation, cutoff, preemphasis_cutoff, control_pipe, pty, power);
+	int errcode = tx(carrier_freq, best_divider, audio_file, rds, pi, ps, rt, ppm, deviation, mpx, cutoff, preemphasis_cutoff, control_pipe, pty, power);
 
 	terminate(errcode);
 }

@@ -35,6 +35,8 @@ int audio_index = 0;
 int audio_len = 0;
 float audio_pos;
 
+float mpx_level;
+
 float fir_buffer_mono[FIR_SIZE] = {0};
 float fir_buffer_stereo[FIR_SIZE] = {0};
 int fir_index = 0;
@@ -58,7 +60,7 @@ float *alloc_empty_buffer(size_t length) {
 
 
 
-int fm_mpx_open(char *filename, size_t len, float cutoff_freq, float preemphasis_corner_freq, int rds) {
+int fm_mpx_open(char *filename, size_t len, float mpx, float cutoff_freq, float preemphasis_corner_freq, int rds) {
 	length = len;
 
 	if(filename != NULL) {
@@ -117,6 +119,8 @@ int fm_mpx_open(char *filename, size_t len, float cutoff_freq, float preemphasis
 		printf("Created low-pass FIR filter for audio channels, with cutoff at %.1f Hz\n", cutoff_freq);
 
 		rds_switch = rds;
+
+		mpx_level = mpx;
 
 		audio_pos = downsample_factor;
 		audio_buffer = alloc_empty_buffer(length * channels);
@@ -217,14 +221,14 @@ int fm_mpx_get_samples(float *mpx_buffer, float *rds_buffer) {
 		// End of FIR filter
 
 		if (channels>1) {
-                mpx_buffer[i] =                                 // 35
-                14.00 * out_mono +                              // Unmodulated mono signal
-                14.00 * carrier_38[phase_38] * out_stereo +     // Stereo difference signal
-                3.500 * carrier_19[phase_19];                   // Stereo pilot tone
+                mpx_buffer[i] =
+                ((mpx_level-(mpx_level/5))/2) * out_mono +                              // Unmodulated mono signal
+                ((mpx_level-(mpx_level/5))/2) * carrier_38[phase_38] * out_stereo +     // Stereo difference signal
+                (mpx_level/10) * carrier_19[phase_19];                   // Stereo pilot tone
 
 			if (rds_switch) {
 				mpx_buffer[i] +=
-                    3.500 * rds_buffer[i];                      // If RDS is enabled, add RDS signal to the output
+                    (mpx_level/10) * rds_buffer[i];                      // If RDS is enabled, add RDS signal to the output
 			}
 
 			phase_19++;
@@ -234,11 +238,11 @@ int fm_mpx_get_samples(float *mpx_buffer, float *rds_buffer) {
 		}
 		else {
             mpx_buffer[i] =                                     // Because we don't have to transmit on other subcarriers, we can boost the mono channel
-                25.00 * out_mono;                               // Unmodulated mono signal
+                (mpx_level-(mpx_level/10)) * out_mono;                               // Unmodulated mono signal
 
 			if (rds_switch) {
 				mpx_buffer[i] +=
-                    3.500 * rds_buffer[i];                      // If RDS is enabled, add RDS signal to the output
+                    (mpx_level/10) * rds_buffer[i];                      // If RDS is enabled, add RDS signal to the output
 			}
 		}
 		audio_pos++;

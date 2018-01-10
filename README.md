@@ -70,6 +70,7 @@ All arguments are optional:
 * `-rt` specifies the radiotext (RT) to be transmitted. Limit: 64 characters. Example::  `-rt 'Hello, world!'`.
 * `-pty` specifies the program type. 0 - 31. Example: `-pty 10` (EU: Pop music). See https://en.wikipedia.org/wiki/Radio_Data_System for more program types.
 * `-dev` specifies the frequency deviation (in KHz). Example `-dev 25.0`.
+* `-mpx` specifies the output mpx power. Default 30. Example `-mpx 20`.
 * `-cutoff` specifies the cutoff frequency (in Hz) used by PiFmAdv's internal lowpass filter. Values greater than 15000 are not compliant. Use carefully.
 * `-preemph` specifies which preemph should be used, since it differs from location. For Europe choose 'eu', for the US choose 'us'.
 * `-ctl` specifies a named pipe (FIFO) to use as a control channel to change PS and RT at run-time (see below).
