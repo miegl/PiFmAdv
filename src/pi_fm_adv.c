@@ -20,6 +20,7 @@
 #include <fcntl.h>
 #include <sys/mman.h>
 #include <sndfile.h>
+#include <getopt.h>
 
 #include "rds.h"                    // RDS
 #include "fm_mpx.h"                 // FM MPX signal
@@ -500,10 +501,13 @@ int tx(uint32_t carrier_freq, uint32_t divider, char *audio_file, int rds, uint1
 }
 
 int main(int argc, char **argv) {
+	int opt;
+
 	char *audio_file = NULL;
 	char *control_pipe = NULL;
 	uint32_t carrier_freq = 107900000;
     	int rds = 1;
+	double alternative_freq[] = {};
 	char *ps = NULL;
 	char *rt = "PiFmAdv: Advanced FM transmitter for the Raspberry Pi";
 	uint16_t pi = 0x1234;
@@ -516,74 +520,132 @@ int main(int argc, char **argv) {
 	int power = 7;
 	float mpx = 30;
 
-	// Parse command-line arguments
-	for(int i=1; i<argc; i++) {
-		char *arg = argv[i];
-		char *param = NULL;
+	const char    	*short_opt = "a:f:d:p:c:P:D:m:w:C:h";
+	struct option   long_opt[] =
+	{
+		{"audio", 	required_argument, NULL, 'a'},
+		{"freq", 	required_argument, NULL, 'f'},
+		{"dev", 	required_argument, NULL, 'd'},
+		{"ppm", 	required_argument, NULL, 'p'},
+		{"cutoff", 	required_argument, NULL, 'c'},
+		{"preemph", 	required_argument, NULL, 'P'},
+		{"div", 	required_argument, NULL, 'D'},
+		{"mpx", 	required_argument, NULL, 'm'},
+		{"power", 	required_argument, NULL, 'w'},
 
-		if(arg[0] == '-' && i+1 < argc) param = argv[i+1];
+		{"rds", 	required_argument, NULL, 'rds'},
+		{"pi", 		required_argument, NULL, 'pi'},
+		{"ps", 		required_argument, NULL, 'ps'},
+		{"rt", 		required_argument, NULL, 'rt'},
+		{"pty", 	required_argument, NULL, 'pty'},
+		{"af", 		required_argument, NULL, 'af'},
+		{"ctl", 	required_argument, NULL, 'C'},
 
-		if((strcmp("-audio", arg)==0) && param != NULL) {
-			i++;
-			audio_file = param;
-		} else if(strcmp("-freq", arg)==0 && param != NULL) {
-			i++;
-			carrier_freq = 1e6 * atof(param);
-			if(carrier_freq < 76e6 || carrier_freq > 108e6)
-				warn("Frequency should be in megahertz between 76.0 and 108.0, but is %f MHz\n", atof(param));
-        } else if(strcmp("-rds", arg)==0 && param != NULL) {
-    		i++;
-    		rds = atof(param);
-		} else if(strcmp("-pi", arg)==0 && param != NULL) {
-			i++;
-			pi = (uint16_t) strtol(param, NULL, 16);
-		} else if(strcmp("-ps", arg)==0 && param != NULL) {
-			i++;
-			ps = param;
-		} else if(strcmp("-rt", arg)==0 && param != NULL) {
-			i++;
-			rt = param;
-		} else if(strcmp("-pty", arg)==0 && param != NULL) {
-			i++;
-			pty = atof(param);
-		} else if(strcmp("-dev", arg)==0 && param != NULL) {
-			i++;
-			deviation = atof(param);
-		} else if(strcmp("-ppm", arg)==0 && param != NULL) {
-			i++;
-			ppm = atof(param);
-		} else if(strcmp("-preemph", arg)==0 && param != NULL) {
-			i++;
-			if(strcmp("eu", param)==0) {
-				preemphasis_cutoff = 3185;
-			} else if(strcmp("us", param)==0) {
-				preemphasis_cutoff = 2120;
-			}
-			else {
-				preemphasis_cutoff = atof(param);
-			}
-		} else if(strcmp("-cutoff", arg)==0 && param != NULL) {
-			i++;
-			cutoff = atof(param);
-		} else if(strcmp("-mpx", arg)==0 && param != NULL) {
-                        i++; 
-                        mpx = atof(param);
-		} else if(strcmp("-ctl", arg)==0 && param != NULL) {
-			i++;
-			control_pipe = param;
-		} else if(strcmp("-div", arg)==0 && param != NULL) {
-			i++;
-			divc = atof(param);
-		} else if(strcmp("-power", arg)==0 && param != NULL) {
-			i++;
-			power = atof(param);
-			if(power < 0 || power >= 8)
-				fatal("Output power must be set in range of 0 - 7\n");
-		} else {
-			fatal("Unrecognised argument: %s.\n"
-			      "Syntax: pi_fm_adv [-freq freq] [-div divider] [-audio file] [-ppm ppm_error] [-pi pi_code]\n"
-			      "                  [-ps ps_text] [-rt rt_text] [-pty program_type] [-dev deviation]\n"
-			      "                  [-cutoff cutoff_freq] [-preemph preemphasis] [-ctl control_pipe] [-rds rds]\n", arg);
+		{"help",	no_argument, NULL, 'h'},
+		{ 0, 		0, 		   0,    0 }
+	};
+
+	while((opt = getopt_long(argc, argv, short_opt, long_opt, NULL)) != -1)
+	{
+		switch(opt)
+		{
+			case -1:
+			case 0:
+			break;
+
+			case 'a': //audio
+				audio_file = optarg;
+				break;
+
+			case 'f': //freq
+				carrier_freq = 1e6 * atof(optarg);
+				if(carrier_freq < 76e6 || carrier_freq > 108e6)
+					warn("Frequency should be in megahertz between 76.0 and 108.0, but is %f MHz\n", atof(optarg));
+				break;
+
+			case 'd': //dev
+				deviation = atof(optarg);
+				break;
+
+			case 'p': //ppm
+				ppm = atof(optarg);
+				break;
+
+			case 'c': //cutoff
+				cutoff = atof(optarg);
+				break;
+
+			case 'P': //preemph
+				if(strcmp("eu", optarg)==0) {
+					preemphasis_cutoff = 3185;
+				} else if(strcmp("us", optarg)==0) {
+					preemphasis_cutoff = 2120;
+				}
+				else {
+					preemphasis_cutoff = atof(optarg);
+				}
+				break;
+
+			case 'D': //div
+				divc = atoi(optarg);
+				break;
+
+			case 'm': //mpx
+				mpx = atof(optarg);
+				break;
+
+			case 'w': //power
+				power = atoi(optarg);
+				if(power < 0 || power >= 8)
+					fatal("Output power must be set in range of 0 - 7\n");
+				break;
+
+			case 'rds': //rds
+				rds = atoi(optarg);
+				break;
+
+			case 'pi': //pi
+				pi = (uint16_t) strtol(optarg, NULL, 16);
+				break;
+
+			case 'ps': //ps
+				ps = optarg;
+				break;
+
+			case 'rt': //rt
+				rt = optarg;
+				break;
+
+			case 'pty': //pty
+				pty = atoi(optarg);
+				break;
+
+			case 'af': //af
+				//TODO
+				break;
+
+			case 'C': //ctl
+				control_pipe = optarg;
+				break;
+
+			case 'h': //help
+				fatal("Help:\n"
+				      "Syntax: pi_fm_adv [--audio (-a) file] [--freq (-f) frequency] [--dev (-d) deviation]\n"
+				      "                  [--ppm (-p) ppm-error] [--cutoff (-c) cutoff-freq] [--preemph (-P) preemphasis]\n"
+				      "                  [--div (-D) divider] [--mpx (-m) mpx-power] [--power (-w) output-power]\n"
+				      "                  [--rds rds-switch] [--pi pi-code] [--ps ps-text] [--rt radiotext]\n"
+				      "                  [--pty program-type] [--af alternative-freq] [--ctl (-C) control-pipe]\n");
+
+				break;
+
+			case ':':
+				fatal("%s: option '-%c' requires an argument\n", argv[0], optopt);
+				break;
+
+			case '?':
+			default:
+				fatal("%s: option '-%c' is invalid. See -h (--help)\n", argv[0], optopt);
+				break;
 		}
 	}
 
@@ -631,6 +693,8 @@ int main(int argc, char **argv) {
 	}
 
 	printf("Carrier: %3.2f Mhz, VCO: %4.1f MHz, Multiplier: %f, Divider: %d\n", carrier_freq/1e6, (double)carrier_freq * best_divider / 1e6, carrier_freq * best_divider * xtal_freq_recip, best_divider);
+
+	printf("1: %f", alternative_freq[1]);
 
 	int errcode = tx(carrier_freq, best_divider, audio_file, rds, pi, ps, rt, ppm, deviation, mpx, cutoff, preemphasis_cutoff, control_pipe, pty, power);
 
