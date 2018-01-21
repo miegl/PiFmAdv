@@ -17,5 +17,6 @@ extern void set_rds_rt(char *rt);
 extern void set_rds_ps(char *ps);
 extern void set_rds_ta(int ta);
 extern void set_rds_pty(int pty);
+extern void set_rds_af(int *af_array);
 
 #endif /* RDS_H */

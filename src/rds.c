@@ -22,6 +22,7 @@ struct {
     char ps[PS_LENGTH];
     char rt[RT_LENGTH];
     int pty;
+    int af[100];
 } rds_params = { 0 };
 /* Here, the first member of the struct must be a scalar to avoid a
    warning on -Wmissing-braces with GCC < 4.8.3
@@ -106,6 +107,7 @@ void get_rds_group(int *buffer) {
     static int state = 0;
     static int ps_state = 0;
     static int rt_state = 0;
+    static int af_state = 0;
     uint16_t blocks[GROUP_LENGTH] = {rds_params.pi, 0, 0, 0};
 
     // Generate block content
@@ -115,7 +117,20 @@ void get_rds_group(int *buffer) {
 	        if(ps_state == 3) blocks[1] |= 0x0004; // DI = 1 - Stereo
             if(rds_params.pty) blocks[1] |= rds_params.pty * 0x20; // PTY
             if(rds_params.ta) blocks[1] |= 0x0010; // TA
-            blocks[2] = 0xCDCD; // no AF
+            if(rds_params.af[0]) { // AF
+		if(af_state == 0) { 
+			blocks[2] = (0x1 * (rds_params.af[0]+224))<<8 | (0x1 * rds_params.af[1]);
+		} else {
+			if(rds_params.af[af_state+1]) {
+				blocks[2] = (0x1 * rds_params.af[af_state])<<8 | (0x1 * rds_params.af[af_state+1]);
+			} else {
+				blocks[2] = (0x1 * rds_params.af[af_state])<<8 | 0xCD;
+			}
+		}
+		
+		af_state = af_state + 2;
+		if(af_state > rds_params.af[0]) af_state = 0;
+            }
             blocks[3] = rds_params.ps[ps_state*2]<<8 | rds_params.ps[ps_state*2+1];
             ps_state++;
             if(ps_state >= 4) ps_state = 0;
@@ -236,6 +251,14 @@ void set_rds_ps(char *ps) {
     for(int i=0; i<8; i++) {
         if(rds_params.ps[i] == 0) rds_params.ps[i] = 32;
     }
+}
+
+void set_rds_af(int *af_array) {
+	rds_params.af[0] = af_array[0];
+	int f;
+	for(f = 1; f < af_array[0]+1; f++) {
+		rds_params.af[f] = af_array[f];
+	}
 }
 
 void set_rds_pty(int pty) {

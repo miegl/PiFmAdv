@@ -239,7 +239,7 @@ static void *map_peripheral(uint32_t base, uint32_t len)
 
 
 
-int tx(uint32_t carrier_freq, uint32_t divider, char *audio_file, int rds, uint16_t pi, char *ps, char *rt, float ppm, float deviation, float mpx, float cutoff, float preemphasis_cutoff, char *control_pipe, int pty, int power) {
+int tx(uint32_t carrier_freq, uint32_t divider, char *audio_file, int rds, uint16_t pi, char *ps, char *rt, int *af_array, float ppm, float deviation, float mpx, float cutoff, float preemphasis_cutoff, char *control_pipe, int pty, int power) {
 	// Catch only important signals
 	for (int i = 0; i < 25; i++) {
 		struct sigaction sa;
@@ -413,22 +413,31 @@ int tx(uint32_t carrier_freq, uint32_t divider, char *audio_file, int rds, uint1
 	uint16_t count2 = 0;
 	int varying_ps = 0;
 
-    printf("RDS Options:\n");
+	printf("RDS Options:\n");
 
-    if(rds) {
-        printf("RDS: %i, ", rds);
-        if(ps) {
-    		set_rds_ps(ps);
-    		printf("PI: %04X, PS: \"%s\", PTY: %i\n", pi, ps, pty);
-    	} else {
-    		printf("PI: %04X, PS: <Varying>, PTY: %i\n", pi, pty);
-    		varying_ps = 1;
-    	}
-    	printf("RT: \"%s\"\n", rt);
-    }
-    else {
-        printf("RDS: %i\n", rds);
-    }
+	if(rds) {
+		printf("RDS: %i, ", rds);
+		if(ps) {
+			set_rds_ps(ps);
+			printf("PI: %04X, PS: \"%s\", PTY: %i\n", pi, ps, pty);
+		} else {
+			printf("PI: %04X, PS: <Varying>, PTY: %i\n", pi, pty);
+			varying_ps = 1;
+		}
+		printf("RT: \"%s\"\n", rt);
+		if(af_array[0]) {
+			set_rds_af(af_array);
+			printf("AF: ");
+			int f;
+			for(f = 1; f < af_array[0]+1; f++) {
+				printf("%f Mhz ", (float)(af_array[f]+875)/10);
+			}
+			printf("\n");
+		}
+	}
+	else {
+		printf("RDS: %i\n", rds);
+	}
 
 	// Initialize the control pipe reader
 	if(control_pipe) {
@@ -507,7 +516,8 @@ int main(int argc, char **argv) {
 	char *control_pipe = NULL;
 	uint32_t carrier_freq = 107900000;
     	int rds = 1;
-	double alternative_freq[] = {};
+	int alternative_freq[100] = {};
+	int af_size = 0;
 	char *ps = NULL;
 	char *rt = "PiFmAdv: Advanced FM transmitter for the Raspberry Pi";
 	uint16_t pi = 0x1234;
@@ -596,8 +606,8 @@ int main(int argc, char **argv) {
 
 			case 'w': //power
 				power = atoi(optarg);
-				if(power < 0 || power >= 8)
-					fatal("Output power must be set in range of 0 - 7\n");
+				if(power < 0 || power > 7)
+					fatal("Output power has to be set in range of 0 - 7\n");
 				break;
 
 			case 'rds': //rds
@@ -621,7 +631,10 @@ int main(int argc, char **argv) {
 				break;
 
 			case 'af': //af
-				//TODO
+				af_size++;
+				alternative_freq[af_size] = (int)(10*atof(optarg))-875;
+				if(alternative_freq[af_size] < 1 || alternative_freq[af_size] > 204)
+					fatal("Alternative Frequency hast to be set in range of 87.6 Mhz - 107.9 Mhz\n");
 				break;
 
 			case 'C': //ctl
@@ -648,6 +661,8 @@ int main(int argc, char **argv) {
 				break;
 		}
 	}
+
+	alternative_freq[0] = af_size;
 
 	double xtal_freq_recip=1.0/19.2e6;
 	int divider, best_divider = 0;
@@ -693,10 +708,8 @@ int main(int argc, char **argv) {
 	}
 
 	printf("Carrier: %3.2f Mhz, VCO: %4.1f MHz, Multiplier: %f, Divider: %d\n", carrier_freq/1e6, (double)carrier_freq * best_divider / 1e6, carrier_freq * best_divider * xtal_freq_recip, best_divider);
-
-	printf("1: %f", alternative_freq[1]);
-
-	int errcode = tx(carrier_freq, best_divider, audio_file, rds, pi, ps, rt, ppm, deviation, mpx, cutoff, preemphasis_cutoff, control_pipe, pty, power);
+	
+	int errcode = tx(carrier_freq, best_divider, audio_file, rds, pi, ps, rt, alternative_freq, ppm, deviation, mpx, cutoff, preemphasis_cutoff, control_pipe, pty, power);
 
 	terminate(errcode);
 }
