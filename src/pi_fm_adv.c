@@ -655,7 +655,7 @@ int main(int argc, char **argv) {
 				      "Syntax: pi_fm_adv [--audio (-a) file] [--freq (-f) frequency] [--dev (-d) deviation]\n"
 				      "                  [--ppm (-p) ppm-error] [--cutoff (-c) cutoff-freq] [--preemph (-P) preemphasis]\n"
 				      "                  [--div (-D) divider] [--mpx (-m) mpx-power] [--power (-w) output-power]\n"
-				      "                  [--rds rds-switch] [--pi pi-code] [--ps ps-text] [--rt radiotext]\n"
+				      "                  [--rds rds-switch] [--pi pi-code] [--ps ps-text] [--rt radiotext] [--tp traffic-program]\n"
 				      "                  [--pty program-type] [--af alternative-freq] [--ctl (-C) control-pipe]\n");
 
 				break;

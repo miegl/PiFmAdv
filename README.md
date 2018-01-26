@@ -58,7 +58,7 @@ To test stereophonic audio, you can try the file `stereo_44100.wav` provided.
 The more general syntax for running Pi-FM-RDS is as follows:
 
 ```
-pi_fm_adv [-freq freq] [-audio file] [-ppm ppm_error] [-rds rds] [-pi pi_code] [-ps ps_text] [-rt rt_text] [-pty program_type][-dev deviation] [-cutoff cutoff_freq] [-preemph preemphasis_mode]
+pi_fm_adv
 ```
 
 All arguments are optional:
@@ -70,6 +70,7 @@ All arguments are optional:
 * `--rt` specifies the radiotext (RT) to be transmitted. Limit: 64 characters. Example:  `--rt 'Hello, world!'`.
 * `--af` specifies alternative frequencies (AF). Example:  `--af 107.9 --af 99.2`.
 * `--pty` specifies the program type. 0 - 31. Example: `--pty 10` (EU: Pop music). See https://en.wikipedia.org/wiki/Radio_Data_System for more program types.
+* `--tp` specifies if the program carries traffic information.  Example `--tp 0`.
 * `--dev` specifies the frequency deviation (in KHz). Example `--dev 25.0`.
 * `--mpx` specifies the output mpx power. Default 30. Example `--mpx 20`.
 * `--cutoff` specifies the cutoff frequency (in Hz) used by PiFmAdv's internal lowpass filter. Values greater than 15000 are not compliant. Use carefully.
