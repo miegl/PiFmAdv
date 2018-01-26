@@ -239,7 +239,7 @@ static void *map_peripheral(uint32_t base, uint32_t len)
 
 
 
-int tx(uint32_t carrier_freq, uint32_t divider, char *audio_file, int rds, uint16_t pi, char *ps, char *rt, int *af_array, float ppm, float deviation, float mpx, float cutoff, float preemphasis_cutoff, char *control_pipe, int pty, int power) {
+int tx(uint32_t carrier_freq, uint32_t divider, char *audio_file, int rds, uint16_t pi, char *ps, char *rt, int *af_array, float ppm, float deviation, float mpx, float cutoff, float preemphasis_cutoff, char *control_pipe, int pty, int tp, int power) {
 	// Catch only important signals
 	for (int i = 0; i < 25; i++) {
 		struct sigaction sa;
@@ -299,11 +299,11 @@ int tx(uint32_t carrier_freq, uint32_t divider, char *audio_file, int rds, uint1
 	clk_reg[EMMCCLK_CNTL] = (0xF0F&clktmp) | (0x5a<<24) | (1<<4) | (6); // Run, Source = PLLD (6)
 	udelay(100);
 
-    /*
+	/*
 	printf("PPM: %f\n", (1.+ppm/1.e6));
 	printf("Real freq: %f\n", (((((carrier_freq*divider)/19.2e6*(1.+ppm/1.e6))*19.2e6)/divider)/1e6));
 	printf("To achieve: %f\n", ((carrier_freq+((ppm* -1)*1e2))+((10000-(carrier_freq*1e-4))*(ppm*1e-2)))/1e6);
-    */
+	*/
 
 	// Adjust PLLC frequency
 	clktmp = clk_reg[PLLC_CTRL];
@@ -409,6 +409,9 @@ int tx(uint32_t carrier_freq, uint32_t divider, char *audio_file, int rds, uint1
 	set_rds_pi(pi);
 	set_rds_rt(rt);
 	set_rds_pty(pty);
+	set_rds_tp(tp);
+	set_rds_ms(1);
+	set_rds_ab(0);
 	uint16_t count = 0;
 	uint16_t count2 = 0;
 	int varying_ps = 0;
@@ -523,9 +526,10 @@ int main(int argc, char **argv) {
 	uint16_t pi = 0x1234;
 	float ppm = 0;
 	float deviation = 75.0;
-	float cutoff = 16400;
+	float cutoff = 15000;
 	float preemphasis_cutoff = 3185;
 	int pty = 15;
+	int tp = 1;
 	int divc = 0;
 	int power = 7;
 	float mpx = 30;
@@ -548,6 +552,7 @@ int main(int argc, char **argv) {
 		{"ps", 		required_argument, NULL, 'ps'},
 		{"rt", 		required_argument, NULL, 'rt'},
 		{"pty", 	required_argument, NULL, 'pty'},
+		{"pty",         required_argument, NULL, 'tp'},
 		{"af", 		required_argument, NULL, 'af'},
 		{"ctl", 	required_argument, NULL, 'C'},
 
@@ -630,11 +635,15 @@ int main(int argc, char **argv) {
 				pty = atoi(optarg);
 				break;
 
+			case 'tp': //tp
+                                tp = atoi(optarg);
+                                break;
+
 			case 'af': //af
 				af_size++;
 				alternative_freq[af_size] = (int)(10*atof(optarg))-875;
 				if(alternative_freq[af_size] < 1 || alternative_freq[af_size] > 204)
-					fatal("Alternative Frequency hast to be set in range of 87.6 Mhz - 107.9 Mhz\n");
+					fatal("Alternative Frequency has to be set in range of 87.6 Mhz - 107.9 Mhz\n");
 				break;
 
 			case 'C': //ctl
@@ -709,7 +718,7 @@ int main(int argc, char **argv) {
 
 	printf("Carrier: %3.2f Mhz, VCO: %4.1f MHz, Multiplier: %f, Divider: %d\n", carrier_freq/1e6, (double)carrier_freq * best_divider / 1e6, carrier_freq * best_divider * xtal_freq_recip, best_divider);
 	
-	int errcode = tx(carrier_freq, best_divider, audio_file, rds, pi, ps, rt, alternative_freq, ppm, deviation, mpx, cutoff, preemphasis_cutoff, control_pipe, pty, power);
+	int errcode = tx(carrier_freq, best_divider, audio_file, rds, pi, ps, rt, alternative_freq, ppm, deviation, mpx, cutoff, preemphasis_cutoff, control_pipe, pty, tp, power);
 
 	terminate(errcode);
 }

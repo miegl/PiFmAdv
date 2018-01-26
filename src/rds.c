@@ -19,9 +19,12 @@
 struct {
     uint16_t pi;
     int ta;
+    int pty;
+    int tp;
+    int ms;
+    int ab;
     char ps[PS_LENGTH];
     char rt[RT_LENGTH];
-    int pty;
     int af[100];
 } rds_params = { 0 };
 /* Here, the first member of the struct must be a scalar to avoid a
@@ -113,32 +116,28 @@ void get_rds_group(int *buffer) {
     // Generate block content
     if(! get_rds_ct_group(blocks)) { // CT (clock time) has priority on other group types
         if(state < 4) { // Type 0A groups
-            blocks[1] = 0x0408 | ps_state;
-	        if(ps_state == 3) blocks[1] |= 0x0004; // DI = 1 - Stereo
-            if(rds_params.pty) blocks[1] |= rds_params.pty * 0x20; // PTY
-            if(rds_params.ta) blocks[1] |= 0x0010; // TA
+            blocks[1] = 0x0000 | rds_params.tp << 10 | rds_params.pty << 5 | rds_params.ta << 4 | rds_params.ms << 3 | ps_state;
+	    if(ps_state == 3) blocks[1] |= 0x0004; // DI = 1 - Stereo
             if(rds_params.af[0]) { // AF
 		if(af_state == 0) { 
-			blocks[2] = (0x1 * (rds_params.af[0]+224))<<8 | (0x1 * rds_params.af[1]);
+			blocks[2] = (rds_params.af[0] + 224) << 8 | rds_params.af[1];
 		} else {
 			if(rds_params.af[af_state+1]) {
-				blocks[2] = (0x1 * rds_params.af[af_state])<<8 | (0x1 * rds_params.af[af_state+1]);
+				blocks[2] = rds_params.af[af_state] << 8 | rds_params.af[af_state+1];
 			} else {
-				blocks[2] = (0x1 * rds_params.af[af_state])<<8 | 0xCD;
+				blocks[2] = rds_params.af[af_state] << 8 | 0xCD;
 			}
 		}
-		
 		af_state = af_state + 2;
 		if(af_state > rds_params.af[0]) af_state = 0;
             }
-            blocks[3] = rds_params.ps[ps_state*2]<<8 | rds_params.ps[ps_state*2+1];
+            blocks[3] = rds_params.ps[ps_state*2] << 8 | rds_params.ps[ps_state*2+1];
             ps_state++;
             if(ps_state >= 4) ps_state = 0;
         } else { // Type 2A groups
-            blocks[1] = 0x2400 | rt_state;
-            if(rds_params.pty) blocks[1] |= rds_params.pty * 0x20;
-            blocks[2] = rds_params.rt[rt_state*4+0]<<8 | rds_params.rt[rt_state*4+1];
-            blocks[3] = rds_params.rt[rt_state*4+2]<<8 | rds_params.rt[rt_state*4+3];
+            blocks[1] = 0x2000 | rds_params.tp << 10 | rds_params.pty << 5 | rds_params.ab | rt_state;
+            blocks[2] = rds_params.rt[rt_state*4+0] << 8 | rds_params.rt[rt_state*4+1];
+            blocks[3] = rds_params.rt[rt_state*4+2] << 8 | rds_params.rt[rt_state*4+3];
             rt_state++;
             if(rt_state >= 16) rt_state = 0;
         }
@@ -262,9 +261,21 @@ void set_rds_af(int *af_array) {
 }
 
 void set_rds_pty(int pty) {
-    rds_params.pty = pty;
+	rds_params.pty = pty;
 }
 
 void set_rds_ta(int ta) {
-    rds_params.ta = ta;
+	rds_params.ta = ta;
+}
+
+void set_rds_tp(int tp) {
+	rds_params.tp = tp;
+}
+
+void set_rds_ms(int ms) {
+	rds_params.ms = ms;
+}
+
+void set_rds_ab(int ab) {
+	rds_params.ab = ab;
 }

@@ -22,6 +22,7 @@ FILE *f_ctl;
 /*
  * Opens a file (pipe) to be used to control the RDS coder, in non-blocking mode.
  */
+
 int open_control_pipe(char *filename) {
 	int fd = open(filename, O_RDONLY | O_NONBLOCK);
     if(fd == -1) return -1;
@@ -42,6 +43,7 @@ int open_control_pipe(char *filename) {
  * Polls the control file (pipe), non-blockingly, and if a command is received,
  * processes it and updates the RDS data.
  */
+
 int poll_control_pipe() {
 	static char buf[CTL_BUFFER_SIZE];
 
@@ -68,6 +70,27 @@ int poll_control_pipe() {
             printf("Set TA to ");
             if(ta) printf("ON\n"); else printf("OFF\n");
             return CONTROL_PIPE_TA_SET;
+        }
+	if(res[0] == 'T' && res[1] == 'P') {
+            int tp = ( strcmp(arg, "ON") == 0 );
+            set_rds_tp(tp);
+            printf("Set TP to ");
+            if(tp) printf("ON\n"); else printf("OFF\n");
+            return CONTROL_PIPE_TP_SET;
+        }
+	if(res[0] == 'M' && res[1] == 'S') {
+            int ms = ( strcmp(arg, "ON") == 0 );
+            set_rds_ms(ms);
+            printf("Set MS to ");
+            if(ms) printf("ON\n"); else printf("OFF\n");
+            return CONTROL_PIPE_MS_SET;
+        }
+	if(res[0] == 'A' && res[1] == 'B') {
+            int ab = ( strcmp(arg, "ON") == 0 );
+            set_rds_ab(ab);
+            printf("Set AB to ");
+            if(ab) printf("ON\n"); else printf("OFF\n");
+            return CONTROL_PIPE_AB_SET;
         }
     }
 
