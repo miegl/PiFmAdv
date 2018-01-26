@@ -552,7 +552,7 @@ int main(int argc, char **argv) {
 		{"ps", 		required_argument, NULL, 'ps'},
 		{"rt", 		required_argument, NULL, 'rt'},
 		{"pty", 	required_argument, NULL, 'pty'},
-		{"pty",         required_argument, NULL, 'tp'},
+		{"tp",		required_argument, NULL, 'tp'},
 		{"af", 		required_argument, NULL, 'af'},
 		{"ctl", 	required_argument, NULL, 'C'},
 
