@@ -525,14 +525,14 @@ int main(int argc, char **argv) {
 	char *rt = "PiFmAdv: Advanced FM transmitter for the Raspberry Pi";
 	uint16_t pi = 0x1234;
 	float ppm = 0;
-	float deviation = 75.0;
+	float deviation = 50;
 	float cutoff = 15000;
 	float preemphasis_cutoff = 3185;
 	int pty = 15;
 	int tp = 1;
 	int divc = 0;
 	int power = 7;
-	float mpx = 30;
+	float mpx = 40;
 
 	const char    	*short_opt = "a:f:d:p:c:P:D:m:w:C:h";
 	struct option   long_opt[] =
