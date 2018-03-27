@@ -369,11 +369,11 @@ int tx(uint32_t carrier_freq, uint32_t divider, char *audio_file, int rds, uint1
 
 	pwm_reg[PWM_CTL] = 0;
 	udelay(100);
-	clk_reg[PWMCLK_CNTL] = 0x5A000005; // Source = PLLC & disable
+	clk_reg[PWMCLK_CNTL] = (0x5a<<24) | (5); // Source = PLLC & disable
 	udelay(100);
-	clk_reg[PWMCLK_DIV] = 0x5A000000 | (idivider<<12) | fdivider;
+	clk_reg[PWMCLK_DIV] = (0x5a<<24) | (idivider<<12) | fdivider;
 	udelay(100);
-	clk_reg[PWMCLK_CNTL] = 0x5A000015; // Source = PLLC, enable, MASH setting 0
+	clk_reg[PWMCLK_CNTL] = (0x5a<<24) | (1<<9) | (1<<4) | (5); // Source = PLLC, enable, MASH setting 1
 	udelay(100);
 	pwm_reg[PWM_RNG1] = 2;
 	udelay(100);
