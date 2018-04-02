@@ -58,9 +58,10 @@
 #define DMA_CONBLK_AD               (0x04/4)
 #define DMA_DEBUG                   (0x20/4)
 
-#define DMA_NUMBER                  5 // DMA channel 5 appears to be unused
 #define DMA_BASE_OFFSET             0x00007000
-#define DMA_LEN                     0xe24
+#define DMA_CHANNEL                 14
+#define DMA_CHANNEL_MAX             14
+#define DMA_CHANNEL_SIZE            0x100
 
 #define PWM_BASE_OFFSET             0x0020C000
 #define PWM_LEN                     0x28
@@ -249,8 +250,8 @@ int tx(uint32_t carrier_freq, uint32_t divider, char *audio_file, int rds, uint1
 		sigaction(i, &sa, NULL);
 	}
 
-	dma_reg = map_peripheral(DMA_VIRT_BASE, DMA_LEN);
-	dma_reg = dma_reg+((0x100/sizeof(int))*(DMA_NUMBER));
+	dma_reg = map_peripheral(DMA_VIRT_BASE, (DMA_CHANNEL_SIZE * (DMA_CHANNEL_MAX + 1)));
+	dma_reg = dma_reg + ((DMA_CHANNEL_SIZE / sizeof(int)) * (DMA_CHANNEL));
 	pwm_reg = map_peripheral(PWM_VIRT_BASE, PWM_LEN);
 	clk_reg = map_peripheral(CLK_VIRT_BASE, CLK_LEN);
 	gpio_reg = map_peripheral(GPIO_VIRT_BASE, GPIO_LEN);
