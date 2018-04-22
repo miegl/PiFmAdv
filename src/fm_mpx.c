@@ -154,9 +154,8 @@ int fm_mpx_get_samples(float *mpx_buffer, float *rds_buffer) {
 					}
 					if(audio_len == 0) {
 						if( sf_seek(inf, 0, SEEK_SET) < 0 ) {
-							//fprintf(stderr, "Could not rewind in audio file, terminating\n");
-							//return -1;
-							return 0;
+							fprintf(stderr, "Could not rewind in audio file, terminating\n");
+							return -1;
 						}
 					} else {
 						//apply preemphasis
