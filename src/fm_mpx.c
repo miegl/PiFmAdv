@@ -60,7 +60,7 @@ float *alloc_empty_buffer(size_t length) {
 
 
 
-int fm_mpx_open(char *filename, size_t len, float mpx, float cutoff_freq, float preemphasis_corner_freq, int rds) {
+int fm_mpx_open(char *filename, size_t len, float cutoff_freq, float preemphasis_corner_freq) {
 	length = len;
 
 	if(filename != NULL) {
@@ -118,10 +118,6 @@ int fm_mpx_open(char *filename, size_t len, float mpx, float cutoff_freq, float 
 		}
 		printf("Created low-pass FIR filter for audio channels, with cutoff at %.1f Hz\n", cutoff_freq);
 
-		rds_switch = rds;
-
-		mpx_level = mpx;
-
 		audio_pos = downsample_factor;
 		audio_buffer = alloc_empty_buffer(length * channels);
 		if(audio_buffer == NULL) return -1;
@@ -136,8 +132,8 @@ int fm_mpx_open(char *filename, size_t len, float mpx, float cutoff_freq, float 
 
 // samples provided by this function are in 0..10: they need to be divided by
 // 10 after.
-int fm_mpx_get_samples(float *mpx_buffer, float *rds_buffer) {
-	if (rds_switch) { get_rds_samples(rds_buffer, length); }
+int fm_mpx_get_samples(float *mpx_buffer, float *rds_buffer, float mpx, int rds, int wait) {
+	if (rds) { get_rds_samples(rds_buffer, length); }
 
 	if(inf == NULL) return 0; // if there is no audio, stop here
 
@@ -154,8 +150,12 @@ int fm_mpx_get_samples(float *mpx_buffer, float *rds_buffer) {
 					}
 					if(audio_len == 0) {
 						if( sf_seek(inf, 0, SEEK_SET) < 0 ) {
-							fprintf(stderr, "Could not rewind in audio file, terminating\n");
-							return -1;
+							if(wait) {
+								return 0;
+							} else {
+								fprintf(stderr, "Could not rewind in audio file, terminating\n");
+                                                        	return -1;
+							}
 						}
 					} else {
 						//apply preemphasis
@@ -220,12 +220,12 @@ int fm_mpx_get_samples(float *mpx_buffer, float *rds_buffer) {
 		// End of FIR filter
 
 		if (channels>1) {
-                	mpx_buffer[i] =
-                	((mpx_level-2)/2) * out_mono +					// Unmodulated mono signal
-                	((mpx_level-2)/2) * carrier_38[phase_38] * out_stereo +		// Stereo difference signal
-                	1 * carrier_19[phase_19];					// Stereo pilot tone
+			mpx_buffer[i] =
+			((mpx-2)/2) * out_mono +					// Unmodulated mono signal
+			((mpx-2)/2) * carrier_38[phase_38] * out_stereo +		// Stereo difference signal
+			1 * carrier_19[phase_19];					// Stereo pilot tone
 
-			if (rds_switch) {
+			if (rds) {
 				mpx_buffer[i] +=
 				1 * rds_buffer[i];					// If RDS is enabled, add RDS signal to the output
 			}
@@ -236,10 +236,10 @@ int fm_mpx_get_samples(float *mpx_buffer, float *rds_buffer) {
 			if(phase_38 >= 6) phase_38 = 0;
 		}
 		else {
-			mpx_buffer[i] = 						// Because we don't have to transmit on other subcarriers, we can boost the mono channel
-                	(mpx_level-1) * out_mono;					// Unmodulated mono signal
+			mpx_buffer[i] =							// Because we don't have to transmit on other subcarriers, we can boost the mono channel
+			(mpx-1) * out_mono;						// Unmodulated mono signal
 
-			if (rds_switch) {
+			if (rds) {
 				mpx_buffer[i] +=
 				1 * rds_buffer[i];					// If RDS is enabled, add RDS signal to the output
 			}

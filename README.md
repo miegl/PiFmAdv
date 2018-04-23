@@ -78,6 +78,7 @@ All arguments are optional:
 * `--ctl` specifies a named pipe (FIFO) to use as a control channel to change PS and RT at run-time (see below).
 * `--ppm` specifies your Raspberry Pi's oscillator error in parts per million (ppm), see below.
 * `--rds` RDS broadcast switch.
+* `--wait` specifies whether PiFmAdv should wait for the the audio pipe or terminate as soon as there is no audio. It's set to 1 by default. 
 
 By default the PS changes back and forth between `PiFmAdv` and a sequence number, starting at `00000000`. The PS changes around one time per second.
 

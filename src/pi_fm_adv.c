@@ -240,7 +240,7 @@ static void *map_peripheral(uint32_t base, uint32_t len)
 
 
 
-int tx(uint32_t carrier_freq, uint32_t divider, char *audio_file, int rds, uint16_t pi, char *ps, char *rt, int *af_array, float ppm, float deviation, float mpx, float cutoff, float preemphasis_cutoff, char *control_pipe, int pty, int tp, int power) {
+int tx(uint32_t carrier_freq, uint32_t divider, char *audio_file, int rds, uint16_t pi, char *ps, char *rt, int *af_array, float ppm, float deviation, float mpx, float cutoff, float preemphasis_cutoff, char *control_pipe, int pty, int tp, int power, int wait) {
 	// Catch only important signals
 	for (int i = 0; i < 25; i++) {
 		struct sigaction sa;
@@ -403,7 +403,7 @@ int tx(uint32_t carrier_freq, uint32_t divider, char *audio_file, int rds, uint1
 	int data_index = 0;
 
 	// Initialize the baseband generator
-	if(fm_mpx_open(audio_file, DATA_SIZE, mpx, cutoff, preemphasis_cutoff, rds) < 0) return 1;
+	if(fm_mpx_open(audio_file, DATA_SIZE, cutoff, preemphasis_cutoff) < 0) return 1;
 
 	// Initialize the RDS modulator
 	char myps[9] = {0};
@@ -489,7 +489,7 @@ int tx(uint32_t carrier_freq, uint32_t divider, char *audio_file, int rds, uint1
 		while (free_slots >= SUBSIZE) {
 			// Get more baseband samples if necessary
 			if(data_len == 0) {
-				if( fm_mpx_get_samples(data, rdsdata) < 0 ) {
+				if( fm_mpx_get_samples(data, rdsdata, mpx, rds, wait) < 0 ) {
 					return 0;
 				}
 				data_len = DATA_SIZE;
@@ -534,8 +534,9 @@ int main(int argc, char **argv) {
 	int divc = 0;
 	int power = 7;
 	float mpx = 40;
+	int wait = 1;
 
-	const char    	*short_opt = "a:f:d:p:c:P:D:m:w:C:h";
+	const char    	*short_opt = "a:f:d:p:c:P:D:m:w:W:C:h";
 	struct option   long_opt[] =
 	{
 		{"audio", 	required_argument, NULL, 'a'},
@@ -547,6 +548,7 @@ int main(int argc, char **argv) {
 		{"div", 	required_argument, NULL, 'D'},
 		{"mpx", 	required_argument, NULL, 'm'},
 		{"power", 	required_argument, NULL, 'w'},
+		{"wait",	required_argument, NULL, 'W'},
 
 		{"rds", 	required_argument, NULL, 'rds'},
 		{"pi", 		required_argument, NULL, 'pi'},
@@ -616,6 +618,10 @@ int main(int argc, char **argv) {
 					fatal("Output power has to be set in range of 0 - 7\n");
 				break;
 
+			case 'W': //wait
+                                wait = atoi(optarg);
+                                break;
+
 			case 'rds': //rds
 				rds = atoi(optarg);
 				break;
@@ -655,7 +661,7 @@ int main(int argc, char **argv) {
 				fatal("Help:\n"
 				      "Syntax: pi_fm_adv [--audio (-a) file] [--freq (-f) frequency] [--dev (-d) deviation]\n"
 				      "                  [--ppm (-p) ppm-error] [--cutoff (-c) cutoff-freq] [--preemph (-P) preemphasis]\n"
-				      "                  [--div (-D) divider] [--mpx (-m) mpx-power] [--power (-w) output-power]\n"
+				      "                  [--div (-D) divider] [--mpx (-m) mpx-power] [--power (-w) output-power] [--wait (-W) wait-switch]\n"
 				      "                  [--rds rds-switch] [--pi pi-code] [--ps ps-text] [--rt radiotext] [--tp traffic-program]\n"
 				      "                  [--pty program-type] [--af alternative-freq] [--ctl (-C) control-pipe]\n");
 
@@ -719,7 +725,7 @@ int main(int argc, char **argv) {
 
 	printf("Carrier: %3.2f Mhz, VCO: %4.1f MHz, Multiplier: %f, Divider: %d\n", carrier_freq/1e6, (double)carrier_freq * best_divider / 1e6, carrier_freq * best_divider * xtal_freq_recip, best_divider);
 	
-	int errcode = tx(carrier_freq, best_divider, audio_file, rds, pi, ps, rt, alternative_freq, ppm, deviation, mpx, cutoff, preemphasis_cutoff, control_pipe, pty, tp, power);
+	int errcode = tx(carrier_freq, best_divider, audio_file, rds, pi, ps, rt, alternative_freq, ppm, deviation, mpx, cutoff, preemphasis_cutoff, control_pipe, pty, tp, power, wait);
 
 	terminate(errcode);
 }
