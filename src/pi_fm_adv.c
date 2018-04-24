@@ -282,22 +282,20 @@ int tx(uint32_t carrier_freq, uint32_t divider, char *audio_file, int rds, uint1
 
 	clk_reg[CORECLK_CNTL] = (0xF0F&clktmp) | (0x5a<<24); // Clear run
 	udelay(100);
-	clk_reg[CORECLK_DIV]  = (0x5a<<24) | (2<<12);
+	clk_reg[CORECLK_DIV]  = (0x5a<<24) | (8<<12); //2
 	udelay(100);
 	clk_reg[CORECLK_CNTL] = (0x5a<<24) | (4); // Source = PLLA (4)
 	udelay(100);
 	clk_reg[CORECLK_CNTL] = (0x5a<<24) | (1<<4) | (4); // Run, Source = PLLA (4)
 	udelay(100);
 
-	// Switch EEMC over to PLLD
+	// Switch EMMC over to PLLD
 	clktmp = clk_reg[EMMCCLK_CNTL];
-	// clk_reg[EMMCCLK_CNTL] = (0xF0F&clktmp) | (0x5a<<24); // Clear run
-	// udelay(100);
-	//clk_reg[EMMCCLK_DIV]  = (0x5a<<24) | (2<<12);
-        //udelay(100);
-	clk_reg[EMMCCLK_CNTL] = (0x5a<<24) | (6); // Source = PLLD (6)
+	clk_reg[EMMCCLK_CNTL] = (0xF0F&clktmp) | (0x5a<<24); // Clear run
 	udelay(100);
-	clk_reg[EMMCCLK_CNTL] = (0x5a<<24) | (1<<4) | (6); // Run, Source = PLLD (6)
+	clk_reg[EMMCCLK_CNTL] = (0xF0F&clktmp) | (0x5a<<24) | (6); // Source = PLLD (6)
+	udelay(100);
+	clk_reg[EMMCCLK_CNTL] = (0xF0F&clktmp) | (0x5a<<24) | (1<<4) | (6); // Run, Source = PLLD (6)
 	udelay(100);
 
 	/*
