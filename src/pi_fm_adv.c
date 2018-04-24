@@ -291,13 +291,13 @@ int tx(uint32_t carrier_freq, uint32_t divider, char *audio_file, int rds, uint1
 
 	// Switch EEMC over to PLLD
 	clktmp = clk_reg[EMMCCLK_CNTL];
-	clk_reg[EMMCCLK_CNTL] = (0xF0F&clktmp) | (0x5a<<24); // Clear run
-	udelay(100);
+	// clk_reg[EMMCCLK_CNTL] = (0xF0F&clktmp) | (0x5a<<24); // Clear run
+	// udelay(100);
 	//clk_reg[EMMCCLK_DIV]  = (0x5a<<24) | (2<<12);
         //udelay(100);
-	clk_reg[EMMCCLK_CNTL] = (0xF0F&clktmp) | (0x5a<<24) | (6); // Source = PLLD (6)
+	clk_reg[EMMCCLK_CNTL] = (0x5a<<24) | (6); // Source = PLLD (6)
 	udelay(100);
-	clk_reg[EMMCCLK_CNTL] = (0xF0F&clktmp) | (0x5a<<24) | (1<<4) | (6); // Run, Source = PLLD (6)
+	clk_reg[EMMCCLK_CNTL] = (0x5a<<24) | (1<<4) | (6); // Run, Source = PLLD (6)
 	udelay(100);
 
 	/*
