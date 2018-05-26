@@ -69,6 +69,8 @@
 #define CLK_LEN                     0x1300
 #define GPIO_BASE_OFFSET            0x00200000
 #define GPIO_LEN                    0x100
+#define PCM_BASE_OFFSET             0x00203000
+#define PCM_LEN                     0x24
 #define PAD_BASE_OFFSET             0x00100000
 #define PAD_LEN                     0x64
 
@@ -90,6 +92,7 @@
 #define PWM_CTL                     (0x00/4)
 #define PWM_DMAC                    (0x08/4)
 #define PWM_RNG1                    (0x10/4)
+#define PWM_RNG2                    (0x20/4)
 #define PWM_FIFO                    (0x18/4)
 
 #define PWMCLK_CNTL                 40
@@ -97,6 +100,13 @@
 
 #define CM_GP0DIV                   (0x7e101074)
 #define CM_PLLCFRAC                 (0x7e102220)
+
+#define CM_LOCK                     (0x114/4)
+#define CM_LOCK_FLOCKH              (1<<12)
+#define CM_LOCK_FLOCKD              (1<<11)
+#define CM_LOCK_FLOCKC              (1<<10)
+#define CM_LOCK_FLOCKB              (1<<9)
+#define CM_LOCK_FLOCKA              (1<<8)
 
 #define CORECLK_CNTL                (0x08/4)
 #define CORECLK_DIV                 (0x0c/4)
@@ -108,10 +118,51 @@
 // PLLs
 #define PLLA_CTRL                   (0x1100/4)
 #define PLLA_FRAC                   (0x1200/4)
+#define PLLA_DSI0                   (0x1300/4)
+#define PLLA_CORE                   (0x1400/4)
+#define PLLA_PER                    (0x1500/4)
+#define PLLA_CCP2                   (0x1600/4)
+
+#define PLLB_CTRL                   (0x11e0/4)
+#define PLLB_FRAC                   (0x12e0/4)
+#define PLLB_ARM                    (0x13e0/4)
+#define PLLB_SP0                    (0x14e0/4)
+#define PLLB_SP1                    (0x15e0/4)
+#define PLLB_SP2                    (0x16e0/4)
+
 #define PLLC_CTRL                   (0x1120/4)
 #define PLLC_FRAC                   (0x1220/4)
+#define PLLC_CORE2                  (0x1320/4)
+#define PLLC_CORE1                  (0x1420/4)
+#define PLLC_PER                    (0x1520/4)
+#define PLLC_CORE0                  (0x1620/4)
+
 #define PLLD_CTRL                   (0x1140/4)
 #define PLLD_FRAC                   (0x1240/4)
+#define PLLD_DSI0                   (0x1340/4)
+#define PLLD_CORE                   (0x1440/4)
+#define PLLD_PER                    (0x1540/4)
+#define PLLD_DSI1                   (0x1640/4)
+
+#define PLLH_CTRL                   (0x1160/4)
+#define PLLH_FRAC                   (0x1260/4)
+#define PLLH_AUX                    (0x1360/4)
+#define PLLH_RCAL                   (0x1460/4)
+#define PLLH_PIX                    (0x1560/4)
+#define PLLH_STS                    (0x1660/4)
+
+#define PCM_CS_A                    (0x00/4)
+#define PCM_FIFO_A                  (0x04/4)
+#define PCM_MODE_A                  (0x08/4)
+#define PCM_RXC_A                   (0x0c/4)
+#define PCM_TXC_A                   (0x10/4)
+#define PCM_DREQ_A                  (0x14/4)
+#define PCM_INTEN_A                 (0x18/4)
+#define PCM_INT_STC_A               (0x1c/4)
+#define PCM_GRAY                    (0x20/4)
+
+#define PCMCLK_CNTL                 38
+#define PCMCLK_DIV                  39
 
 #define PWMCTL_MODE1                (1<<1)
 #define PWMCTL_PWEN1                (1<<0)
@@ -154,6 +205,7 @@ static volatile uint32_t *pwm_reg;
 static volatile uint32_t *clk_reg;
 static volatile uint32_t *dma_reg;
 static volatile uint32_t *gpio_reg;
+static volatile uint32_t *pcm_reg;
 static volatile uint32_t *pad_reg;
 
 static void udelay(int us)
@@ -255,6 +307,7 @@ int tx(uint32_t carrier_freq, uint32_t divider, char *audio_file, int rds, uint1
 	pwm_reg = map_peripheral(PWM_VIRT_BASE, PWM_LEN);
 	clk_reg = map_peripheral(CLK_VIRT_BASE, CLK_LEN);
 	gpio_reg = map_peripheral(GPIO_VIRT_BASE, GPIO_LEN);
+	pcm_reg = map_peripheral(PCM_VIRT_BASE, PCM_LEN);
 	pad_reg = map_peripheral(PAD_VIRT_BASE, PAD_LEN);
 	uint32_t freq_ctl;
 
@@ -276,52 +329,52 @@ int tx(uint32_t carrier_freq, uint32_t divider, char *audio_file, int rds, uint1
 	}
 	printf("virt_addr = %p\n", mbox.virt_addr);
 
-	// Switch the core over to PLLA
-	int clktmp;
-	clktmp = clk_reg[CORECLK_CNTL];
-
-	clk_reg[CORECLK_CNTL] = (0xF0F&clktmp) | (0x5a<<24); // Clear run
-	udelay(100);
-	clk_reg[CORECLK_DIV]  = (0x5a<<24) | (8<<12); //2
-	udelay(100);
-	clk_reg[CORECLK_CNTL] = (0x5a<<24) | (4); // Source = PLLA (4)
-	udelay(100);
-	clk_reg[CORECLK_CNTL] = (0x5a<<24) | (1<<4) | (4); // Run, Source = PLLA (4)
+	clk_reg[GPCLK_CNTL] = (0x5a<<24) | (1<<4) | (4);
 	udelay(100);
 
-	// Switch EMMC over to PLLD
-	clktmp = clk_reg[EMMCCLK_CNTL];
-	clk_reg[EMMCCLK_CNTL] = (0xF0F&clktmp) | (0x5a<<24); // Clear run
+	clk_reg[0x104/4] = 0x5A00022A; // Enable PLLA_PER	
 	udelay(100);
-	clk_reg[EMMCCLK_CNTL] = (0xF0F&clktmp) | (0x5a<<24) | (6); // Source = PLLD (6)
-	udelay(100);
-	clk_reg[EMMCCLK_CNTL] = (0xF0F&clktmp) | (0x5a<<24) | (1<<4) | (6); // Run, Source = PLLD (6)
+	
+	uint32_t ana[4];
+	for (int i = 3; i >= 0; i--)
+	{
+		ana[i] = clk_reg[(0x1010/4) + i];
+	}
+
+	ana[1]&=~(1<<14);
+	for (int i = 3; i >= 0; i--)
+	{
+		clk_reg[(0x1010/4) + i] = (0x5A << 24) | ana[i];
+	}
 	udelay(100);
 
-	/*
-	printf("PPM: %f\n", (1.+ppm/1.e6));
-	printf("Real freq: %f\n", (((((carrier_freq*divider)/19.2e6*(1.+ppm/1.e6))*19.2e6)/divider)/1e6));
-	printf("To achieve: %f\n", ((carrier_freq+((ppm* -1)*1e2))+((10000-(carrier_freq*1e-4))*(ppm*1e-2)))/1e6);
-	*/
+	clk_reg[PLLA_CORE] = 0x5A000001;
+	clk_reg[PLLA_PER] = 0x5A000001;
+	udelay(100);
 
-	// Adjust PLLC frequency
-	clktmp = clk_reg[PLLC_CTRL];
-	//clk_reg[PLLC_CTRL] = (0xF0F&clktmp) | (0x5a<<24); // Clear run
+
+	// Adjust PLLA frequency
 	freq_ctl = (unsigned int)(((carrier_freq*divider)/19.2e6*((double)(1<<20))));
-	clk_reg[PLLC_CTRL] = (0x5a<<24) | (0x21<<12) | (freq_ctl>>20 ); // Integer part
+	clk_reg[PLLA_CTRL] = (0x5a<<24) | (0x21<<12) | (freq_ctl>>20 ); // Integer part
 	freq_ctl&=0xFFFFF;
-	clk_reg[PLLC_FRAC] = (0x5a<<24) | (freq_ctl&0xFFFFC); // Fractional part
+	clk_reg[PLLA_FRAC] = (0x5a<<24) | (freq_ctl&0xFFFFC); // Fractional part
 	udelay(100);
+
+	if ((clk_reg[CM_LOCK] & CM_LOCK_FLOCKA) > 0)
+		printf("Master PLLA Locked\n");
+	else
+		printf("Warning: Master PLLA NOT Locked\n");
 
 	// Program GPCLK integer division
-	clktmp = clk_reg[GPCLK_CNTL];
-	clk_reg[GPCLK_CNTL] = (0xF0F&clktmp) | (0x5a<<24); // Clear run
-	udelay(100);
+	//int clktmp;
+	//clktmp = clk_reg[GPCLK_CNTL];
+	//clk_reg[GPCLK_CNTL] = (0xF0F&clktmp) | (0x5a<<24); // Clear run
+	//udelay(100);
 	clk_reg[GPCLK_DIV]  = (0x5a<<24) | (divider<<12);
 	udelay(100);
-	clk_reg[GPCLK_CNTL] = (0x5a<<24) | (5); // Source = PLLC (5)
+	clk_reg[GPCLK_CNTL] = (0x5a<<24) | (4); // Source = PLLA (4)
 	udelay(100);
-	clk_reg[GPCLK_CNTL] = (0x5a<<24) | (1<<4) | (5); // Run, Source = PLLC (5)
+	clk_reg[GPCLK_CNTL] = (0x5a<<24) | (1<<4) | (4); // Run, Source = PLLA (4)
 	udelay(100);
 
 	// Drive Strength: 0 = 2mA, 7 = 16mA. Ref: https://www.scribd.com/doc/101830961/GPIO-Pads-Control2
@@ -334,15 +387,13 @@ int tx(uint32_t carrier_freq, uint32_t divider, char *audio_file, int rds, uint1
 
 	ctl = (struct control_data_s *) mbox.virt_addr;
 	dma_cb_t *cbp = ctl->cb;
-	uint32_t phys_sample_dst = divider ? CM_PLLCFRAC : CM_GP0DIV;
-	uint32_t phys_pwm_fifo_addr = PWM_PHYS_BASE + 0x18;
 
 	for (int i = 0; i < NUM_SAMPLES; i++) {
 		ctl->sample[i] = 0x5a << 24 | freq_ctl; // Silence
 		// Write a frequency sample
 		cbp->info = BCM2708_DMA_NO_WIDE_BURSTS | BCM2708_DMA_WAIT_RESP;
 		cbp->src = mem_virt_to_phys(ctl->sample + i);
-		cbp->dst = phys_sample_dst;
+		cbp->dst = 0x7E000000 + (PLLA_FRAC<<2) + CLK_BASE_OFFSET;
 		cbp->length = 4;
 		cbp->stride = 0;
 		cbp->next = mem_virt_to_phys(cbp + 1);
@@ -350,7 +401,7 @@ int tx(uint32_t carrier_freq, uint32_t divider, char *audio_file, int rds, uint1
 		// Delay
 		cbp->info = BCM2708_DMA_NO_WIDE_BURSTS | BCM2708_DMA_WAIT_RESP | BCM2708_DMA_D_DREQ | BCM2708_DMA_PER_MAP(5);
 		cbp->src = mem_virt_to_phys(mbox.virt_addr);
-		cbp->dst = phys_pwm_fifo_addr;
+		cbp->dst = 0x7E000000 + (PWM_FIFO<<2) + PWM_BASE_OFFSET;
 		cbp->length = 4;
 		cbp->stride = 0;
 		cbp->next = mem_virt_to_phys(cbp + 1);
@@ -368,11 +419,11 @@ int tx(uint32_t carrier_freq, uint32_t divider, char *audio_file, int rds, uint1
 
 	pwm_reg[PWM_CTL] = 0;
 	udelay(100);
-	clk_reg[PWMCLK_CNTL] = (0x5a<<24) | (5); // Source = PLLC & disable
+	clk_reg[PWMCLK_CNTL] = (0x5a<<24) | (4); // Source = PLLA & disable
 	udelay(100);
 	clk_reg[PWMCLK_DIV] = (0x5a<<24) | (idivider<<12) | fdivider;
 	udelay(100);
-	clk_reg[PWMCLK_CNTL] = (0x5a<<24) | (1<<9) | (1<<4) | (5); // Source = PLLC, enable, MASH setting 1
+	clk_reg[PWMCLK_CNTL] = (0x5a<<24) | (1<<9) | (1<<4) | (4); // Source = PLLA, enable, MASH setting 1
 	udelay(100);
 	pwm_reg[PWM_RNG1] = 2;
 	udelay(100);
@@ -381,7 +432,7 @@ int tx(uint32_t carrier_freq, uint32_t divider, char *audio_file, int rds, uint1
 	pwm_reg[PWM_CTL] = PWMCTL_CLRF;
 	udelay(100);
 	pwm_reg[PWM_CTL] = PWMCTL_USEF1 | PWMCTL_PWEN1;
-	udelay(100);
+	udelay(100);	
 
 	// Initialise the DMA
 	dma_reg[DMA_CS] = BCM2708_DMA_RESET;
@@ -453,7 +504,7 @@ int tx(uint32_t carrier_freq, uint32_t divider, char *audio_file, int rds, uint1
 
 	printf("Starting to transmit on %3.1f MHz.\n", carrier_freq/1e6);
 
-	float deviation_scale_factor =  0.1 * (divider*(deviation*1000)/(19.2e6/((double)(1<<20))) ); //TODO: PPM
+	float deviation_scale_factor =  0.1 * (divider*(deviation*1000)/(19.2e6/((double)(1<<20))) );
 
 	for (;;) { // Loop
 		// Default (varying) PS
@@ -474,7 +525,7 @@ int tx(uint32_t carrier_freq, uint32_t divider, char *audio_file, int rds, uint1
 			varying_ps = 0; // Disable varying PS when control pipe is set.
 		}
 
-		usleep(2500);
+		usleep(5000);
 
 		uint32_t cur_cb = mem_phys_to_virt(dma_reg[DMA_CONBLK_AD]);
 		int last_sample = (last_cb - (uint32_t)mbox.virt_addr) / (sizeof(dma_cb_t) * 2);
