@@ -489,7 +489,6 @@ int tx(int carrier_freq, int divider, char *audio_file, int rds, uint16_t pi, ch
 
 	// Data structures for baseband data
 	float data[DATA_SIZE];
-	float rdsdata[DATA_SIZE];
 	int data_len = 0;
 	int data_index = 0;
 
@@ -497,28 +496,19 @@ int tx(int carrier_freq, int divider, char *audio_file, int rds, uint16_t pi, ch
 	if(fm_mpx_open(audio_file, DATA_SIZE, cutoff, preemphasis_cutoff) < 0) return 1;
 
 	// Initialize the RDS modulator
-	char myps[9] = {0};
 	set_rds_pi(pi);
+	set_rds_ps(ps);
 	set_rds_rt(rt);
 	set_rds_pty(pty);
 	set_rds_tp(tp);
 	set_rds_ms(1);
 	set_rds_ab(0);
-	uint16_t count = 0;
-	uint16_t count2 = 0;
-	int varying_ps = 0;
 
 	printf("RDS Options:\n");
 
 	if(rds) {
 		printf("RDS: %i, ", rds);
-		if(ps) {
-			set_rds_ps(ps);
-			printf("PI: %04X, PS: \"%s\", PTY: %i\n", pi, ps, pty);
-		} else {
-			printf("PI: %04X, PS: <Varying>, PTY: %i\n", pi, pty);
-			varying_ps = 1;
-		}
+		printf("PI: %04X, PS: \"%s\", PTY: %i\n", pi, ps, pty);
 		printf("RT: \"%s\"\n", rt);
 		if(af_array[0]) {
 			set_rds_af(af_array);
@@ -548,26 +538,9 @@ int tx(int carrier_freq, int divider, char *audio_file, int rds, uint16_t pi, ch
 
 	float deviation_scale_factor =  0.1 * (divider*(deviation*1000)/(19.2e6/((double)(1<<20))) );
 
-	for (;;) { // Loop
-		// Default (varying) PS
-		if(varying_ps) {
-			if(count == 2048) {
-				snprintf(myps, 9, "%08d", count2);
-				set_rds_ps(myps); // Show PI
-				count2++;
-			}
-			if(count == 4096) {
-				set_rds_ps("PiFmAdv");
-				count = 0;
-			}
-			count++;
-		}
+	for (;;) {
 
-		if(control_pipe && poll_control_pipe() == CONTROL_PIPE_PS_SET) {
-			varying_ps = 0; // Disable varying PS when control pipe is set.
-		}
-
-		usleep(1000);
+		if(control_pipe) poll_control_pipe();
 
 		int cur_cb = (int)mem_phys_to_virt(dma_reg[DMA_CONBLK_AD]);
 		int last_sample = (last_cb - (int)mbox.virt_addr) / (sizeof(dma_cb_t) * 2);
@@ -580,7 +553,7 @@ int tx(int carrier_freq, int divider, char *audio_file, int rds, uint16_t pi, ch
 		while (free_slots >= SUBSIZE) {
 			// Get more baseband samples if necessary
 			if(data_len == 0) {
-				if( fm_mpx_get_samples(data, rdsdata, mpx, rds, wait) < 0 ) {
+				if( fm_mpx_get_samples(data, mpx, rds, wait) < 0 ) {
 					return 0;
 				}
 				data_len = DATA_SIZE;
@@ -599,6 +572,8 @@ int tx(int carrier_freq, int divider, char *audio_file, int rds, uint16_t pi, ch
 			free_slots -= SUBSIZE;
 		}
 		last_cb = (int)mbox.virt_addr + last_sample * sizeof(dma_cb_t) * 2;
+
+		usleep(1000);
 	}
 
 	return 0;
@@ -613,7 +588,7 @@ int main(int argc, char **argv) {
     	int rds = 1;
 	int alternative_freq[100] = {};
 	int af_size = 0;
-	char *ps = NULL;
+	char *ps = "PiFmAdv";
 	char *rt = "PiFmAdv: Advanced FM transmitter for the Raspberry Pi";
 	uint16_t pi = 0x1234;
 	float ppm = 0;

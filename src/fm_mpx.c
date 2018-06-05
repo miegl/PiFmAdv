@@ -132,8 +132,8 @@ int fm_mpx_open(char *filename, size_t len, float cutoff_freq, float preemphasis
 
 // samples provided by this function are in 0..10: they need to be divided by
 // 10 after.
-int fm_mpx_get_samples(float *mpx_buffer, float *rds_buffer, float mpx, int rds, int wait) {
-	if (rds) { get_rds_samples(rds_buffer, length); }
+int fm_mpx_get_samples(float *mpx_buffer, float mpx, int rds, int wait) {
+	if (rds) { get_rds_samples(mpx_buffer, length); }
 
 	if(inf == NULL) return 0; // if there is no audio, stop here
 
@@ -220,15 +220,15 @@ int fm_mpx_get_samples(float *mpx_buffer, float *rds_buffer, float mpx, int rds,
 		// End of FIR filter
 
 		if (channels>1) {
-			mpx_buffer[i] =
-			((mpx-2)/2) * out_mono +					// Unmodulated mono signal
-			((mpx-2)/2) * carrier_38[phase_38] * out_stereo +		// Stereo difference signal
-			1 * carrier_19[phase_19];					// Stereo pilot tone
+			mpx_buffer[i] +=
+			((mpx-2)/2) * out_mono +
+			((mpx-2)/2) * carrier_38[phase_38] * out_stereo +
+			1 * carrier_19[phase_19];
 
-			if (rds) {
-				mpx_buffer[i] +=
-				1 * rds_buffer[i];					// If RDS is enabled, add RDS signal to the output
-			}
+//			if (rds) {
+//				mpx_buffer[i] +=
+//				1 * rds_buffer[i];
+//			}
 
 			phase_19++;
 			phase_38++;
@@ -236,13 +236,13 @@ int fm_mpx_get_samples(float *mpx_buffer, float *rds_buffer, float mpx, int rds,
 			if(phase_38 >= 6) phase_38 = 0;
 		}
 		else {
-			mpx_buffer[i] =							// Because we don't have to transmit on other subcarriers, we can boost the mono channel
-			(mpx-1) * out_mono;						// Unmodulated mono signal
+			mpx_buffer[i] +=
+			(mpx-1) * out_mono;
 
-			if (rds) {
-				mpx_buffer[i] +=
-				1 * rds_buffer[i];					// If RDS is enabled, add RDS signal to the output
-			}
+//			if (rds) {
+//				mpx_buffer[i] +=
+//				1 * rds_buffer[i];
+//			}
 		}
 		audio_pos++;
 	}
