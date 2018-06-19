@@ -50,7 +50,7 @@ This will generate an FM transmission on 107.9 MHz, with default station name (P
 You can add monophonic or stereophonic audio by referencing an audio file as follows:
 
 ```
-sudo ./pi_fm_adv -audio sound.wav
+sudo ./pi_fm_adv --audio sound.wav
 ```
 
 To test stereophonic audio, you can try the file `stereo_44100.wav` provided.
@@ -85,37 +85,37 @@ By default the PS changes back and forth between `PiFmAdv` and a sequence number
 
 ### Clock calibration (only if experiencing difficulties)
 
-The RDS standards states that the error for the 57 kHz subcarrier must be less than ± 6 Hz, i.e. less than 105 ppm (parts per million). The Raspberry Pi's oscillator error may be above this figure. That is where the `-ppm` parameter comes into play: you specify your Pi's error and PiFmAdv adjusts the clock dividers accordingly.
+The RDS standards states that the error for the 57 kHz subcarrier must be less than ± 6 Hz, i.e. less than 105 ppm (parts per million). The Raspberry Pi's oscillator error may be above this figure. That is where the `--ppm` parameter comes into play: you specify your Pi's error and PiFmAdv adjusts the clock dividers accordingly.
 
-In practice, I found that PiFmAdv works okay even without using the `-ppm` parameter. I suppose the receivers are more tolerant than stated in the RDS spec.
+In practice, I found that PiFmAdv works okay even without using the `--ppm` parameter. I suppose the receivers are more tolerant than stated in the RDS spec.
 
 One way to measure the ppm error is to play the `pulses.wav` file: it will play a pulse for precisely 1 second, then play a 1-second silence, and so on. Record the audio output from a radio with a good audio card. Say you sample at 44.1 kHz. Measure 10 intervals. Using [Audacity](http://audacity.sourceforge.net/) for example determine the number of samples of these 10 intervals: in the absence of clock error, it should be 441,000 samples. With my Pi, I found 441,132 samples. Therefore, my ppm error is (441132-441000)/441000 * 1e6 = 299 ppm, **assuming that my sampling device (audio card) has no clock error...**
 
 
 ### Piping audio into PiFmAdv
 
-If you use the argument `-audio -`, PiFmAdv reads audio data on standard input. This allows you to pipe the output of a program into PiFmAdv. For instance, this can be used to read MP3 files using Sox:
+If you use the argument `--audio -`, PiFmAdv reads audio data on standard input. This allows you to pipe the output of a program into PiFmAdv. For instance, this can be used to read MP3 files using Sox:
 
 ```
-sox -t mp3 http://www.linuxvoice.com/episodes/lv_s02e01.mp3 -t wav -  | sudo ./pi_fm_adv -audio -
+sox -t mp3 http://www.linuxvoice.com/episodes/lv_s02e01.mp3 -t wav -  | sudo ./pi_fm_adv --audio -
 ```
 
 Or to pipe the AUX input of a sound card into PiFmAdv:
 
 ```
-sudo arecord -fS16_LE -r 44100 -Dplughw:1,0 -c 2 -  | sudo ./pi_fm_adv -audio -
+sudo arecord -fS16_LE -r 44100 -Dplughw:1,0 -c 2 -  | sudo ./pi_fm_adv --audio -
 ```
 
 
 ### Changing PS, RT, TA and PTY at run-time
 
-You can control PS, RT, TA (Traffic Announcement flag) and PTY (Program Type) at run-time using a named pipe (FIFO). For this run PiFmAdv with the `-ctl` argument.
+You can control PS, RT, TA (Traffic Announcement flag) and PTY (Program Type) at run-time using a named pipe (FIFO). For this run PiFmAdv with the `--ctl` argument.
 
 Example:
 
 ```
 mkfifo rds_ctl
-sudo ./pi_fm_adv -ctl rds_ctl
+sudo ./pi_fm_adv --ctl rds_ctl
 ```
 
 Then you can send “commands” to change PS, RT, TA and PTY:

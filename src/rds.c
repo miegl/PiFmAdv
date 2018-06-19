@@ -12,8 +12,6 @@
 #include <stdlib.h>
 #include "waveforms.h"
 
-#define RT_LENGTH 64
-#define PS_LENGTH 8
 #define GROUP_LENGTH 4
 
 struct {
@@ -23,8 +21,8 @@ struct {
     int tp;
     int ms;
     int ab;
-    char ps[PS_LENGTH];
-    char rt[RT_LENGTH];
+    char ps[8];
+    char rt[64];
     int af[100];
 } rds_params = { 0 };
 /* Here, the first member of the struct must be a scalar to avoid a
@@ -166,10 +164,10 @@ void get_rds_group(int *buffer) {
    envelope with a 57 kHz carrier, which is very efficient as 57 kHz is 4 times the
    sample frequency we are working at (228 kHz).
  */
-void get_rds_samples(float *buffer, int count) {
+void get_rds_samples(double *buffer, int count) {
     static int bit_buffer[BITS_PER_GROUP];
     static int bit_pos = BITS_PER_GROUP;
-    static float sample_buffer[SAMPLE_BUFFER_SIZE] = {0};
+    static double sample_buffer[SAMPLE_BUFFER_SIZE] = {0};
 
     static int prev_output = 0;
     static int cur_output = 0;
@@ -199,7 +197,7 @@ void get_rds_samples(float *buffer, int count) {
             int idx = in_sample_index;
 
             for(int j=0; j<FILTER_SIZE; j++) {
-                float val = (*src++);
+                double val = (*src++);
                 if(inverting) val = -val;
                 sample_buffer[idx++] += val;
                 if(idx >= SAMPLE_BUFFER_SIZE) idx = 0;
@@ -212,7 +210,7 @@ void get_rds_samples(float *buffer, int count) {
             sample_count = 0;
         }
 
-        float sample = sample_buffer[out_sample_index];
+        double sample = sample_buffer[out_sample_index];
         sample_buffer[out_sample_index] = 0;
         out_sample_index++;
         if(out_sample_index >= SAMPLE_BUFFER_SIZE) out_sample_index = 0;

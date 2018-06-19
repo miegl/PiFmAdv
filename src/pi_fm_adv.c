@@ -71,7 +71,8 @@
 #define GPFSEL1                         (0x04/4)
 #define GPFSEL2                         (0x08/4)
 #define GPPUD                           (0x94/4)
-#define GPPUDCLK0                       (0x9C/4)
+#define GPPUDCLK0                       (0x98/4)
+#define GPPUDCLK1                       (0x9C/4)
 
 #define CORECLK_CNTL                    (0x08/4)
 #define CORECLK_DIV                     (0x0c/4)
@@ -86,6 +87,21 @@
 #define CM_LOCK_FLOCKC                  (1<<10)
 #define CM_LOCK_FLOCKD                  (1<<11)
 #define CM_LOCK_FLOCKH                  (1<<12)
+
+#define CM_PLLA                         (0x104/4)
+#define CM_PLLC                         (0x108/4)
+#define CM_PLLD                         (0x10c/4)
+#define CM_PLLH                         (0x110/4)
+#define CM_PLLB                         (0x170/4)
+
+#define A2W_PLLA_ANA0                   (0x1010/4)
+#define A2W_PLLC_ANA0                   (0x1030/4)
+#define A2W_PLLD_ANA0                   (0x1050/4)
+#define A2W_PLLH_ANA0                   (0x1070/4)
+#define A2W_PLLB_ANA0                   (0x10f0/4)
+#define A2W_PLL_KA_SHIFT                7
+#define A2W_PLL_KI_SHIFT                19
+#define A2W_PLL_KP_SHIFT                15
 
 #define PLLA_CTRL                       (0x1100/4)
 #define PLLA_FRAC                       (0x1200/4)
@@ -237,17 +253,17 @@ static struct {
 
 struct control_data_s {
     dma_cb_t cb[NUM_CBS];
-    int sample[NUM_SAMPLES];
+    uint32_t sample[NUM_SAMPLES];
 };
 
 static struct control_data_s *ctl;
 
-static volatile int *pwm_reg;
-static volatile int *clk_reg;
-static volatile int *dma_reg;
-static volatile int *gpio_reg;
-static volatile int *pcm_reg;
-static volatile int *pad_reg;
+static volatile uint32_t *pwm_reg;
+static volatile uint32_t *clk_reg;
+static volatile uint32_t *dma_reg;
+static volatile uint32_t *gpio_reg;
+static volatile uint32_t *pcm_reg;
+static volatile uint32_t *pad_reg;
 
 static void udelay(int us)
 {
@@ -316,7 +332,7 @@ static uint32_t mem_phys_to_virt(uint32_t phys)
     return phys - (uint32_t)mbox.bus_addr + (uint32_t)mbox.virt_addr;
 }
 
-static void *map_peripheral(int base, int len)
+static void *map_peripheral(uint32_t base, uint32_t len)
 {
     int fd = open("/dev/mem", O_RDWR | O_SYNC);
     void * vaddr;
@@ -333,7 +349,7 @@ static void *map_peripheral(int base, int len)
 
 
 
-int tx(int carrier_freq, int divider, char *audio_file, int rds, uint16_t pi, char *ps, char *rt, int *af_array, float ppm, float deviation, float mpx, float cutoff, float preemphasis_cutoff, char *control_pipe, int pty, int tp, int power, int wait) {
+int tx(uint32_t carrier_freq, int divider, char *audio_file, int rds, uint16_t pi, char *ps, char *rt, int *af_array, float ppm, float deviation, float mpx, int cutoff, int preemphasis_cutoff, char *control_pipe, int pty, int tp, int power, int wait) {
 	// Catch only important signals
 	for (int i = 0; i < 25; i++) {
 		struct sigaction sa;
@@ -350,7 +366,7 @@ int tx(int carrier_freq, int divider, char *audio_file, int rds, uint16_t pi, ch
 	gpio_reg = map_peripheral(GPIO_VIRT_BASE, GPIO_LEN);
 	pcm_reg = map_peripheral(PCM_VIRT_BASE, PCM_LEN);
 	pad_reg = map_peripheral(PAD_VIRT_BASE, PAD_LEN);
-	int freq_ctl;
+	uint32_t freq_ctl;
 
 	// Use the mailbox interface to the VC to ask for physical memory.
 	mbox.handle = mbox_open();
@@ -373,30 +389,30 @@ int tx(int carrier_freq, int divider, char *audio_file, int rds, uint16_t pi, ch
 	clk_reg[GPCLK_CNTL] = (0x5a<<24) | (1<<4) | (4);
 	udelay(100);
 
-	clk_reg[0x104/4] = 0x5A00022A; // Enable PLLA_PER	
+	clk_reg[CM_PLLA] = 0x5A00022A; // Enable PLLA_PER
 	udelay(100);
 	
 	int ana[4];
 	for (int i = 3; i >= 0; i--)
 	{
-		ana[i] = clk_reg[(0x1010/4) + i];
+		ana[i] = clk_reg[(A2W_PLLA_ANA0) + i];
 	}
 
 	ana[1]&=~(1<<14);
 	for (int i = 3; i >= 0; i--)
 	{
-		clk_reg[(0x1010/4) + i] = (0x5A << 24) | ana[i];
+		clk_reg[(A2W_PLLA_ANA0) + i] = (0x5A << 24) | ana[i];
 	}
 	udelay(100);
 
-	clk_reg[PLLA_CORE] = 0x5A000001;
-	clk_reg[PLLA_PER] = 0x5A000001;
+	clk_reg[PLLA_CORE] = (0x5a<<24) | (1<<8); // Disable
+	clk_reg[PLLA_PER] = 0x5A000001; // Div
 	udelay(100);
 
 
 	// Adjust PLLA frequency
 	freq_ctl = (unsigned int)(((carrier_freq*divider)/19.2e6*((double)(1<<20))));
-	clk_reg[PLLA_CTRL] = (0x5a<<24) | (0x21<<12) | (freq_ctl>>20 ); // Integer part
+	clk_reg[PLLA_CTRL] = (0x5a<<24) | (0x21<<12) | (freq_ctl>>20); // Integer part
 	freq_ctl&=0xFFFFF;
 	clk_reg[PLLA_FRAC] = (0x5a<<24) | (freq_ctl&0xFFFFC); // Fractional part
 	udelay(100);
@@ -452,9 +468,9 @@ int tx(int carrier_freq, int divider, char *audio_file, int rds, uint16_t pi, ch
 	cbp->next = mem_virt_to_phys(mbox.virt_addr);
 
 	// Here we define the rate at which we want to update the GPCLK control register
-	float srdivider = (((double)carrier_freq*divider/1e3)/(2*228*(1.+ppm/1.e6)));
-	int idivider = (int) srdivider;
-	int fdivider = (int) ((srdivider - idivider)*pow(2, 12));
+	double srdivider = (((double)carrier_freq*divider/1e3)/(2*228*(1.+ppm/1.e6)));
+	uint32_t idivider = (uint32_t)srdivider;
+	uint32_t fdivider = (uint32_t)((srdivider - idivider)*pow(2, 12));
 
 	printf("PPM correction is %.4f, divider is %.4f (%d + %d*2^-12).\n", ppm, srdivider, idivider, fdivider);
 
@@ -485,10 +501,11 @@ int tx(int carrier_freq, int divider, char *audio_file, int rds, uint16_t pi, ch
 	dma_reg[DMA_CS] = BCM2708_DMA_PRIORITY(15) | BCM2708_DMA_PANIC_PRIORITY(15) | BCM2708_DMA_DISDEBUG | BCM2708_DMA_ACTIVE;
 
 
-	int last_cb = (int)ctl->cb;
+	uint32_t last_cb = (uint32_t)ctl->cb;
 
 	// Data structures for baseband data
-	float data[DATA_SIZE];
+	double data[DATA_SIZE];
+	double rds_buffer[DATA_SIZE];
 	int data_len = 0;
 	int data_index = 0;
 
@@ -536,13 +553,13 @@ int tx(int carrier_freq, int divider, char *audio_file, int rds, uint16_t pi, ch
 
 	printf("Starting to transmit on %3.1f MHz.\n", carrier_freq/1e6);
 
-	float deviation_scale_factor =  0.1 * (divider*(deviation*1000)/(19.2e6/((double)(1<<20))) );
+	double deviation_scale_factor =  0.1 * (divider*(deviation*1000)/(19.2e6/((double)(1<<20))));
 
 	for (;;) {
 
 		if(control_pipe) poll_control_pipe();
 
-		int cur_cb = (int)mem_phys_to_virt(dma_reg[DMA_CONBLK_AD]);
+		uint32_t cur_cb = (int)mem_phys_to_virt(dma_reg[DMA_CONBLK_AD]);
 		int last_sample = (last_cb - (int)mbox.virt_addr) / (sizeof(dma_cb_t) * 2);
 		int this_sample = (cur_cb - (int)mbox.virt_addr) / (sizeof(dma_cb_t) * 2);
 		int free_slots = this_sample - last_sample;
@@ -553,25 +570,25 @@ int tx(int carrier_freq, int divider, char *audio_file, int rds, uint16_t pi, ch
 		while (free_slots >= SUBSIZE) {
 			// Get more baseband samples if necessary
 			if(data_len == 0) {
-				if( fm_mpx_get_samples(data, mpx, rds, wait) < 0 ) {
+				if(fm_mpx_get_samples(data, rds_buffer, mpx, rds, wait) < 0 ) {
 					return 0;
 				}
 				data_len = DATA_SIZE;
 				data_index = 0;
 			}
 
-			float dval = data[data_index]*deviation_scale_factor;
-			int intval = ((int)((dval)) & ~0x3);
+			double dval = data[data_index]*deviation_scale_factor;
+			//int intval = ((int)(dval)); //((int)((dval)) & ~0x3);
 			data_index++;
 			data_len--;
 
-			ctl->sample[last_sample++] = (0x5A << 24 | freq_ctl) + intval;
+			ctl->sample[last_sample++] = (0x5A << 24 | freq_ctl) + dval;
 			if (last_sample == NUM_SAMPLES)
 				last_sample = 0;
 
 			free_slots -= SUBSIZE;
 		}
-		last_cb = (int)mbox.virt_addr + last_sample * sizeof(dma_cb_t) * 2;
+		last_cb = (uint32_t)mbox.virt_addr + last_sample * sizeof(dma_cb_t) * 2;
 
 		usleep(1000);
 	}
@@ -584,7 +601,7 @@ int main(int argc, char **argv) {
 
 	char *audio_file = NULL;
 	char *control_pipe = NULL;
-	int carrier_freq = 107900000;
+	uint32_t carrier_freq = 107900000;
     	int rds = 1;
 	int alternative_freq[100] = {};
 	int af_size = 0;
@@ -593,8 +610,8 @@ int main(int argc, char **argv) {
 	uint16_t pi = 0x1234;
 	float ppm = 0;
 	float deviation = 50;
-	float cutoff = 15000;
-	float preemphasis_cutoff = 3185;
+	int cutoff = 15000;
+	int preemphasis_cutoff = 3185;
 	int pty = 15;
 	int tp = 1;
 	int divc = 0;
@@ -656,7 +673,7 @@ int main(int argc, char **argv) {
 				break;
 
 			case 'c': //cutoff
-				cutoff = atof(optarg);
+				cutoff = atoi(optarg);
 				break;
 
 			case 'P': //preemph
@@ -666,7 +683,7 @@ int main(int argc, char **argv) {
 					preemphasis_cutoff = 2120;
 				}
 				else {
-					preemphasis_cutoff = atof(optarg);
+					preemphasis_cutoff = atoi(optarg);
 				}
 				break;
 
