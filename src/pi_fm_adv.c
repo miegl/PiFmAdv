@@ -275,8 +275,15 @@ static void terminate(int num)
 {
     // Stop outputting and generating the clock.
     if (clk_reg && gpio_reg && mbox.virt_addr) {
-        // Set GPIO4 to be an output (instead of ALT FUNC 0, which is the clock).
-        gpio_reg[GPFSEL0] = (gpio_reg[GPFSEL0] & ~(7 << 12)) | (1 << 12);
+        // Set GPIOs to be an output (instead of ALT FUNC 0, which is the clock).
+        gpio_reg[0] = (gpio_reg[0] & ~(7 << 12)) | (1 << 12); //GPIO4
+	udelay(10);
+	gpio_reg[2] = (gpio_reg[2] & ~(7 << 0)) | (1 << 0); //GPIO20
+	udelay(10);
+	gpio_reg[3] = (gpio_reg[3] & ~(7 << 6)) | (1 << 6); //GPIO32
+	udelay(10);
+	gpio_reg[3] = (gpio_reg[3] & ~(7 << 12)) | (1 << 12); //GPIO34
+	udelay(10);
 
         // Disable the clock generator.
         clk_reg[GPCLK_CNTL] = 0x5A;
@@ -349,7 +356,7 @@ static void *map_peripheral(uint32_t base, uint32_t len)
 
 
 
-int tx(uint32_t carrier_freq, int divider, char *audio_file, int rds, uint16_t pi, char *ps, char *rt, int *af_array, float ppm, float deviation, float mpx, int cutoff, int preemphasis_cutoff, char *control_pipe, int pty, int tp, int power, int wait) {
+int tx(uint32_t carrier_freq, int divider, char *audio_file, int rds, uint16_t pi, char *ps, char *rt, int *af_array, float ppm, float deviation, float mpx, int cutoff, int preemphasis_cutoff, char *control_pipe, int pty, int tp, int power, int gpio, int wait) {
 	// Catch only important signals
 	for (int i = 0; i < 25; i++) {
 		struct sigaction sa;
@@ -436,10 +443,20 @@ int tx(uint32_t carrier_freq, int divider, char *audio_file, int rds, uint16_t p
 
 	// Drive Strength: 0 = 2mA, 7 = 16mA. Ref: https://www.scribd.com/doc/101830961/GPIO-Pads-Control2
 	pad_reg[GPIO_PAD_0_27] = 0x5a000018 + power;
+	pad_reg[GPIO_PAD_28_45] = 0x5a000018 + power;
 	udelay(100);
 
-	// GPIO4 needs to be ALT FUNC 0 to output the clock
-	gpio_reg[GPFSEL0] = (gpio_reg[GPFSEL0] & ~(7 << 12)) | (4 << 12);
+	int reg = gpio / 10;
+	int shift = (gpio % 10) * 3;
+	int mode;
+	if(gpio == 20) {
+		mode = 2;
+	} else {
+		mode = 4;
+	}
+
+	// GPIO needs to be ALT FUNC 0 to output the clock
+	gpio_reg[reg] = (gpio_reg[reg] & ~(7 << shift)) | (mode << shift);
 	udelay(100);
 
 	ctl = (struct control_data_s *) mbox.virt_addr;
@@ -616,6 +633,7 @@ int main(int argc, char **argv) {
 	int tp = 1;
 	int divc = 0;
 	int power = 7;
+	int gpio = 4;
 	float mpx = 40;
 	int wait = 1;
 
@@ -631,6 +649,7 @@ int main(int argc, char **argv) {
 		{"div", 	required_argument, NULL, 'D'},
 		{"mpx", 	required_argument, NULL, 'm'},
 		{"power", 	required_argument, NULL, 'w'},
+		{"gpio",	required_argument, NULL, 'g'},
 		{"wait",	required_argument, NULL, 'W'},
 
 		{"rds", 	required_argument, NULL, 'rds'},
@@ -701,6 +720,12 @@ int main(int argc, char **argv) {
 					fatal("Output power has to be set in range of 0 - 7\n");
 				break;
 
+			case 'g': //gpio
+                                gpio = atoi(optarg); 
+                                if(gpio != 4 && gpio != 20 && gpio != 32 && gpio != 34)
+                                        fatal("Available GPIO pins: 4,20,32,34\n");
+                                break;
+
 			case 'W': //wait
                                 wait = atoi(optarg);
                                 break;
@@ -742,9 +767,9 @@ int main(int argc, char **argv) {
 
 			case 'h': //help
 				fatal("Help:\n"
-				      "Syntax: pi_fm_adv [--audio (-a) file] [--freq (-f) frequency] [--dev (-d) deviation]\n"
-				      "                  [--ppm (-p) ppm-error] [--cutoff (-c) cutoff-freq] [--preemph (-P) preemphasis]\n"
-				      "                  [--div (-D) divider] [--mpx (-m) mpx-power] [--power (-w) output-power] [--wait (-W) wait-switch]\n"
+				      "Syntax: pi_fm_adv [--audio (-a) file] [--freq (-f) frequency] [--dev (-d) deviation] [--ppm (-p) ppm-error]\n"
+				      "                  [--cutoff (-c) cutoff-freq] [--preemph (-P) preemphasis] [--div (-D) divider] \n"
+				      "                  [--mpx (-m) mpx-power] [--power (-w) output-power] [--gpio (-g) gpio-pin] [--wait (-W) wait-switch]\n"
 				      "                  [--rds rds-switch] [--pi pi-code] [--ps ps-text] [--rt radiotext] [--tp traffic-program]\n"
 				      "                  [--pty program-type] [--af alternative-freq] [--ctl (-C) control-pipe]\n");
 
@@ -808,7 +833,7 @@ int main(int argc, char **argv) {
 
 	printf("Carrier: %3.2f Mhz, VCO: %4.1f MHz, Multiplier: %f, Divider: %d\n", carrier_freq/1e6, (double)carrier_freq * best_divider / 1e6, carrier_freq * best_divider * xtal_freq_recip, best_divider);
 	
-	int errcode = tx(carrier_freq, best_divider, audio_file, rds, pi, ps, rt, alternative_freq, ppm, deviation, mpx, cutoff, preemphasis_cutoff, control_pipe, pty, tp, power, wait);
+	int errcode = tx(carrier_freq, best_divider, audio_file, rds, pi, ps, rt, alternative_freq, ppm, deviation, mpx, cutoff, preemphasis_cutoff, control_pipe, pty, tp, power, gpio, wait);
 
 	terminate(errcode);
 }
