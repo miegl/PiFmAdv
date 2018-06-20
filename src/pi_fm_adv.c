@@ -618,7 +618,7 @@ int main(int argc, char **argv) {
 
 	char *audio_file = NULL;
 	char *control_pipe = NULL;
-	uint32_t carrier_freq = 107900000;
+	uint32_t carrier_freq = 87600000;
     	int rds = 1;
 	int alternative_freq[100] = {};
 	int af_size = 0;
