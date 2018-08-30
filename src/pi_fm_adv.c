@@ -525,7 +525,7 @@ int tx(uint32_t carrier_freq, int divider, char *audio_file, int rds, uint16_t p
 	dma_reg[DMA_CS] = BCM2708_DMA_INT | BCM2708_DMA_END;
 	dma_reg[DMA_CONBLK_AD] = mem_virt_to_phys(ctl->cb);
 	dma_reg[DMA_DEBUG] = 7; // clear debug error flags
-	dma_reg[DMA_CS] = BCM2708_DMA_PRIORITY(15) | BCM2708_DMA_PANIC_PRIORITY(15) | BCM2708_DMA_DISDEBUG | BCM2708_DMA_ACTIVE;
+	dma_reg[DMA_CS] = DMA_CS_PRIORITY(15) | DMA_CS_PANIC_PRIORITY(15) | DMA_CS_DISDEBUG | DMA_CS_ACTIVE;
 
 
 	uint32_t last_cb = (uint32_t)ctl->cb;
