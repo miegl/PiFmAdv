@@ -208,6 +208,16 @@
 #define DMA_CONBLK_AD                   (0x04/4)
 #define DMA_DEBUG                       (0x20/4)
 
+#define DMA_CS_RESET			(1<<31)
+#define DMA_CS_ABORT			(1<<30)
+#define DMA_CS_DISDEBUG			(1<<29)
+#define DMA_CS_WAIT_FOR_OUTSTANDING_WRITES (1<<28)
+#define DMA_CS_INT			(1<<2)
+#define DMA_CS_END			(1<<1)
+#define DMA_CS_ACTIVE			(1<<0)
+#define DMA_CS_PRIORITY(x)		((x)&0xf << 16)
+#define DMA_CS_PANIC_PRIORITY(x)	((x)&0xf << 20)
+
 #define DREQ_PCM_TX                     2
 #define DREQ_PCM_RX                     3
 #define DREQ_SMI                        4
