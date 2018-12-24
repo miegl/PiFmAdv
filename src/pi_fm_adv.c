@@ -292,8 +292,8 @@ static void terminate(int num)
 	udelay(10);
 	gpio_reg[3] = (gpio_reg[3] & ~(7 << 6)) | (1 << 6); //GPIO32
 	udelay(10);
-	gpio_reg[3] = (gpio_reg[3] & ~(7 << 12)) | (1 << 12); //GPIO34
-	udelay(10);
+	//gpio_reg[3] = (gpio_reg[3] & ~(7 << 12)) | (1 << 12); //GPIO34 - Doesn't work on Pi 3, 3B+, Zero W
+	//udelay(10);
 
         // Disable the clock generator.
         clk_reg[GPCLK_CNTL] = 0x5A;
@@ -731,9 +731,9 @@ int main(int argc, char **argv) {
 				break;
 
 			case 'g': //gpio
-                                gpio = atoi(optarg); 
-                                if(gpio != 4 && gpio != 20 && gpio != 32 && gpio != 34)
-                                        fatal("Available GPIO pins: 4,20,32,34\n");
+                                gpio = atoi(optarg);
+                                if(gpio != 4 && gpio != 20 && gpio != 32) // && gpio != 34)
+                                        fatal("Available GPIO pins: 4,20,32\n");
                                 break;
 
 			case 'W': //wait
