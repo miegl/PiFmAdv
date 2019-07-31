@@ -43,7 +43,7 @@
 #define MEM_FLAG                        0x04
 #define CLOCK_BASE			19.2e6
 #define DMA_CHANNEL			14
-#elif (RASPI) == 4                      // Raspberry Pi 2 & 3
+#elif (RASPI) == 4                      // Raspberry Pi 4
 #define PERIPH_VIRT_BASE                0xfe000000
 #define PERIPH_PHYS_BASE                0x7e000000
 #define DRAM_PHYS_BASE                  0xc0000000
