@@ -11,11 +11,11 @@ ifeq ($(UNAME), armv6l)
 	CFLAGS = $(STD_CFLAGS) -march=armv6 -mtune=arm1176jzf-s -mfloat-abi=hard -mfpu=vfp -ffast-math -DRASPI=1
 	TARGET = pi1
 else ifeq ($(PCPUI), 11)
-		CFLAGS = $(STD_CFLAGS) -march=armv7-a -mtune=arm1176jzf-s -mfloat-abi=hard -mfpu=vfp -ffast-math -DRASPI=4
-		TARGET = pi4
+	CFLAGS = $(STD_CFLAGS) -march=armv7-a -mtune=arm1176jzf-s -mfloat-abi=hard -mfpu=vfp -ffast-math -DRASPI=4
+	TARGET = pi4
 else ifeq ($(UNAME), armv7l)
-		CFLAGS = $(STD_CFLAGS) -march=armv7-a -mtune=arm1176jzf-s -mfloat-abi=hard -mfpu=vfp -ffast-math -DRASPI=2
-		TARGET = pi2
+	CFLAGS = $(STD_CFLAGS) -march=armv7-a -mtune=arm1176jzf-s -mfloat-abi=hard -mfpu=vfp -ffast-math -DRASPI=2
+	TARGET = pi2
 else
 	CFLAGS = $(STD_CFLAGS)
 	TARGET = other

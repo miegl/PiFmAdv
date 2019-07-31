@@ -34,22 +34,22 @@
 #define PERIPH_PHYS_BASE                0x7e000000
 #define DRAM_PHYS_BASE                  0x40000000
 #define MEM_FLAG                        0x0c
-#define XTAL_CLOCK			19.2e6
-#define DMA_CHANNEL                     14
+#define CLOCK_BASE			19.2e6
+#define DMA_CHANNEL			14
 #elif (RASPI) == 2                      // Raspberry Pi 2 & 3
 #define PERIPH_VIRT_BASE                0x3f000000
 #define PERIPH_PHYS_BASE                0x7e000000
 #define DRAM_PHYS_BASE                  0xc0000000
 #define MEM_FLAG                        0x04
-#define XTAL_CLOCK			19.2e6
-#define DMA_CHANNEL                     14
-#elif (RASPI) == 4                      // Raspberry Pi 4
+#define CLOCK_BASE			19.2e6
+#define DMA_CHANNEL			14
+#elif (RASPI) == 4                      // Raspberry Pi 2 & 3
 #define PERIPH_VIRT_BASE                0xfe000000
 #define PERIPH_PHYS_BASE                0x7e000000
 #define DRAM_PHYS_BASE                  0xc0000000
 #define MEM_FLAG                        0x04
-#define XTAL_CLOCK			54.0e6
-#define DMA_CHANNEL                     6
+#define CLOCK_BASE			54.0e6
+#define DMA_CHANNEL			6
 #else
 #error Unknown Raspberry Pi version (variable RASPI)
 #endif
@@ -218,6 +218,16 @@
 #define DMA_CONBLK_AD                   (0x04/4)
 #define DMA_DEBUG                       (0x20/4)
 
+#define DMA_CS_RESET			(1<<31)
+#define DMA_CS_ABORT			(1<<30)
+#define DMA_CS_DISDEBUG			(1<<29)
+#define DMA_CS_WAIT_FOR_OUTSTANDING_WRITES (1<<28)
+#define DMA_CS_INT			(1<<2)
+#define DMA_CS_END			(1<<1)
+#define DMA_CS_ACTIVE			(1<<0)
+#define DMA_CS_PRIORITY(x)		((x)&0xf << 16)
+#define DMA_CS_PANIC_PRIORITY(x)	((x)&0xf << 20)
+
 #define DREQ_PCM_TX                     2
 #define DREQ_PCM_RX                     3
 #define DREQ_SMI                        4
@@ -292,8 +302,8 @@ static void terminate(int num)
 	udelay(10);
 	gpio_reg[3] = (gpio_reg[3] & ~(7 << 6)) | (1 << 6); //GPIO32
 	udelay(10);
-	gpio_reg[3] = (gpio_reg[3] & ~(7 << 12)) | (1 << 12); //GPIO34
-	udelay(10);
+	//gpio_reg[3] = (gpio_reg[3] & ~(7 << 12)) | (1 << 12); //GPIO34 - Doesn't work on Pi 3, 3B+, Zero W
+	//udelay(10);
 
         // Disable the clock generator.
         clk_reg[GPCLK_CNTL] = 0x5A;
@@ -428,7 +438,7 @@ int tx(uint32_t carrier_freq, int divider, char *audio_file, int rds, uint16_t p
 
 
 	// Adjust PLLA frequency
-	freq_ctl = (unsigned int)(((carrier_freq*divider)/XTAL_CLOCK*((double)(1<<20))));
+	freq_ctl = (unsigned int)(((carrier_freq*divider)/CLOCK_BASE*((double)(1<<20))));
 	clk_reg[PLLA_CTRL] = (0x5a<<24) | (0x21<<12) | (freq_ctl>>20); // Integer part
 	freq_ctl&=0xFFFFF;
 	clk_reg[PLLA_FRAC] = (0x5a<<24) | (freq_ctl&0xFFFFC); // Fractional part
@@ -580,7 +590,7 @@ int tx(uint32_t carrier_freq, int divider, char *audio_file, int rds, uint16_t p
 
 	printf("Starting to transmit on %3.1f MHz.\n", carrier_freq/1e6);
 
-	double deviation_scale_factor =  0.1 * (divider*(deviation*1000)/(XTAL_CLOCK/((double)(1<<20))));
+	double deviation_scale_factor =  0.1 * (divider*(deviation*1000)/(CLOCK_BASE/((double)(1<<20))));
 
 	for (;;) {
 
@@ -617,7 +627,7 @@ int tx(uint32_t carrier_freq, int divider, char *audio_file, int rds, uint16_t p
 		}
 		last_cb = (uint32_t)mbox.virt_addr + last_sample * sizeof(dma_cb_t) * 2;
 
-		usleep(1000);
+		usleep(5000);
 	}
 
 	return 0;
@@ -646,8 +656,8 @@ int main(int argc, char **argv) {
 	int gpio = 4;
 	float mpx = 40;
 	int wait = 1;
-        int srate = 0;
-        int nochan = 0;
+	int srate = 0;
+	int nochan = 0;
 
 	const char    	*short_opt = "a:f:d:p:c:P:D:m:w:W:C:h";
 	struct option   long_opt[] =
@@ -663,6 +673,8 @@ int main(int argc, char **argv) {
 		{"power", 	required_argument, NULL, 'w'},
 		{"gpio",	required_argument, NULL, 'g'},
 		{"wait",	required_argument, NULL, 'W'},
+		{"srate",	required_argument, NULL, 'S'},
+		{"nochan",	required_argument, NULL, 'N'},
 
 		{"rds", 	required_argument, NULL, 'rds'},
 		{"pi", 		required_argument, NULL, 'pi'},
@@ -672,9 +684,6 @@ int main(int argc, char **argv) {
 		{"tp",		required_argument, NULL, 'tp'},
 		{"af", 		required_argument, NULL, 'af'},
 		{"ctl", 	required_argument, NULL, 'C'},
-
-		{"srate", 	required_argument, NULL, 'S'},
-		{"nochan", 	required_argument, NULL, 'N'},
 
 		{"help",	no_argument, NULL, 'h'},
 		{ 0, 		0, 		   0,    0 }
@@ -736,9 +745,9 @@ int main(int argc, char **argv) {
 				break;
 
 			case 'g': //gpio
-                                gpio = atoi(optarg); 
-                                if(gpio != 4 && gpio != 20 && gpio != 32 && gpio != 34)
-                                        fatal("Available GPIO pins: 4,20,32,34\n");
+                                gpio = atoi(optarg);
+                                if(gpio != 4 && gpio != 20 && gpio != 32) // && gpio != 34)
+                                        fatal("Available GPIO pins: 4,20,32\n");
                                 break;
 
 			case 'W': //wait
@@ -811,7 +820,7 @@ int main(int argc, char **argv) {
 
 	alternative_freq[0] = af_size;
 
-	double xtal_freq_recip=1.0/XTAL_CLOCK;
+	double xtal_freq_recip=1.0/CLOCK_BASE;
 	int divider, best_divider = 0;
 	int min_int_multiplier, max_int_multiplier;
 	int int_multiplier;
