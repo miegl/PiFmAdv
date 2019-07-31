@@ -34,11 +34,22 @@
 #define PERIPH_PHYS_BASE                0x7e000000
 #define DRAM_PHYS_BASE                  0x40000000
 #define MEM_FLAG                        0x0c
+#define CLOCK_BASE			19.2e6
+#define DMA_CHANNEL			14
 #elif (RASPI) == 2                      // Raspberry Pi 2 & 3
 #define PERIPH_VIRT_BASE                0x3f000000
 #define PERIPH_PHYS_BASE                0x7e000000
 #define DRAM_PHYS_BASE                  0xc0000000
 #define MEM_FLAG                        0x04
+#define CLOCK_BASE			19.2e6
+#define DMA_CHANNEL			14
+#elif (RASPI) == 4                      // Raspberry Pi 4
+#define PERIPH_VIRT_BASE                0xfe000000
+#define PERIPH_PHYS_BASE                0x7e000000
+#define DRAM_PHYS_BASE                  0xc0000000
+#define MEM_FLAG                        0x04
+#define CLOCK_BASE			54.0e6
+#define DMA_CHANNEL			6
 #else
 #error Unknown Raspberry Pi version (variable RASPI)
 #endif
@@ -184,7 +195,6 @@
 #define GPIO_PAD_46_52                  (0x34/4)
 
 // DMA
-#define DMA_CHANNEL                     14
 #define DMA_CHANNEL_MAX                 14
 #define DMA_CHANNEL_SIZE                0x100
 
@@ -366,7 +376,7 @@ static void *map_peripheral(uint32_t base, uint32_t len)
 
 
 
-int tx(uint32_t carrier_freq, int divider, char *audio_file, int rds, uint16_t pi, char *ps, char *rt, int *af_array, float ppm, float deviation, float mpx, int cutoff, int preemphasis_cutoff, char *control_pipe, int pty, int tp, int power, int gpio, int wait) {
+int tx(uint32_t carrier_freq, int divider, char *audio_file, int rds, uint16_t pi, char *ps, char *rt, int *af_array, float ppm, float deviation, float mpx, int cutoff, int preemphasis_cutoff, char *control_pipe, int pty, int tp, int power, int gpio, int wait, int srate, int nochan) {
 	// Catch only important signals
 	for (int i = 0; i < 25; i++) {
 		struct sigaction sa;
@@ -428,7 +438,7 @@ int tx(uint32_t carrier_freq, int divider, char *audio_file, int rds, uint16_t p
 
 
 	// Adjust PLLA frequency
-	freq_ctl = (unsigned int)(((carrier_freq*divider)/19.2e6*((double)(1<<20))));
+	freq_ctl = (unsigned int)(((carrier_freq*divider)/CLOCK_BASE*((double)(1<<20))));
 	clk_reg[PLLA_CTRL] = (0x5a<<24) | (0x21<<12) | (freq_ctl>>20); // Integer part
 	freq_ctl&=0xFFFFF;
 	clk_reg[PLLA_FRAC] = (0x5a<<24) | (freq_ctl&0xFFFFC); // Fractional part
@@ -537,7 +547,7 @@ int tx(uint32_t carrier_freq, int divider, char *audio_file, int rds, uint16_t p
 	int data_index = 0;
 
 	// Initialize the baseband generator
-	if(fm_mpx_open(audio_file, DATA_SIZE, cutoff, preemphasis_cutoff) < 0) return 1;
+	if(fm_mpx_open(audio_file, DATA_SIZE, cutoff, preemphasis_cutoff, srate, nochan) < 0) return 1;
 
 	// Initialize the RDS modulator
 	set_rds_pi(pi);
@@ -580,7 +590,7 @@ int tx(uint32_t carrier_freq, int divider, char *audio_file, int rds, uint16_t p
 
 	printf("Starting to transmit on %3.1f MHz.\n", carrier_freq/1e6);
 
-	double deviation_scale_factor =  0.1 * (divider*(deviation*1000)/(19.2e6/((double)(1<<20))));
+	double deviation_scale_factor =  0.1 * (divider*(deviation*1000)/(CLOCK_BASE/((double)(1<<20))));
 
 	for (;;) {
 
@@ -646,6 +656,8 @@ int main(int argc, char **argv) {
 	int gpio = 4;
 	float mpx = 40;
 	int wait = 1;
+	int srate = 0;
+	int nochan = 0;
 
 	const char    	*short_opt = "a:f:d:p:c:P:D:m:w:W:C:h";
 	struct option   long_opt[] =
@@ -661,6 +673,8 @@ int main(int argc, char **argv) {
 		{"power", 	required_argument, NULL, 'w'},
 		{"gpio",	required_argument, NULL, 'g'},
 		{"wait",	required_argument, NULL, 'W'},
+		{"srate",	required_argument, NULL, 'S'},
+		{"nochan",	required_argument, NULL, 'N'},
 
 		{"rds", 	required_argument, NULL, 'rds'},
 		{"pi", 		required_argument, NULL, 'pi'},
@@ -740,6 +754,14 @@ int main(int argc, char **argv) {
                                 wait = atoi(optarg);
                                 break;
 
+			case 'S': //sample rate
+				srate = atoi(optarg);
+				break;
+
+			case 'N': //number of channels
+				nochan = atoi(optarg);
+				break;
+
 			case 'rds': //rds
 				rds = atoi(optarg);
 				break;
@@ -798,7 +820,7 @@ int main(int argc, char **argv) {
 
 	alternative_freq[0] = af_size;
 
-	double xtal_freq_recip=1.0/19.2e6;
+	double xtal_freq_recip=1.0/CLOCK_BASE;
 	int divider, best_divider = 0;
 	int min_int_multiplier, max_int_multiplier;
 	int int_multiplier;
@@ -843,7 +865,7 @@ int main(int argc, char **argv) {
 
 	printf("Carrier: %3.2f Mhz, VCO: %4.1f MHz, Multiplier: %f, Divider: %d\n", carrier_freq/1e6, (double)carrier_freq * best_divider / 1e6, carrier_freq * best_divider * xtal_freq_recip, best_divider);
 	
-	int errcode = tx(carrier_freq, best_divider, audio_file, rds, pi, ps, rt, alternative_freq, ppm, deviation, mpx, cutoff, preemphasis_cutoff, control_pipe, pty, tp, power, gpio, wait);
+	int errcode = tx(carrier_freq, best_divider, audio_file, rds, pi, ps, rt, alternative_freq, ppm, deviation, mpx, cutoff, preemphasis_cutoff, control_pipe, pty, tp, power, gpio, wait, srate, nochan);
 
 	terminate(errcode);
 }
