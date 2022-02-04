@@ -10,41 +10,42 @@
 #include <strings.h>
 #include <math.h>
 
-#include "rds.h"
+#include <soxr.h>
 
-#define PI 3.14159265359
+#include "rds.h"
 
 #define FIR_HALF_SIZE 30
 #define FIR_SIZE (2*FIR_HALF_SIZE-1)
 
-size_t length;
-
 // coefficients of the low-pass FIR filter
 double low_pass_fir[FIR_HALF_SIZE];
 
-double carrier_38[] = {0.0, 0.8660254037844386, 0.8660254037844388, 1.2246467991473532e-16, -0.8660254037844384, -0.8660254037844386};
-double carrier_19[] = {0.0, 0.5, 0.8660254037844386, 1.0, 0.8660254037844388, 0.5, 1.2246467991473532e-16, -0.5, -0.8660254037844384, -1.0, -0.8660254037844386, -0.5};
+double carrier_38[] = {0, 0.866025403784438589324, 0.866025403784438761604, 0, -0.866025403784438417099, -0.866025403784438600762};
+double carrier_19[] = {0, 0.499999999999999950262, 0.866025403784438589324, 1, 0.866025403784438761604, 0.499999999999999960183, 0, -0.500000000000000132652, -0.866025403784438417099, -1, -0.866025403784438600762, -0.499999999999999681651};
 
 int phase_38 = 0;
 int phase_19 = 0;
 
-double downsample_factor;
-
+float *input_buffer;
+size_t ilength;
 double *audio_buffer;
+size_t alength;
+
 int audio_index = 0;
 int audio_len = 0;
-double audio_pos;
 
 double fir_buffer_mono[FIR_SIZE] = {0};
 double fir_buffer_stereo[FIR_SIZE] = {0};
 int fir_index = 0;
 int channels;
 
-double *last_buffer_val;
-double preemphasis_prewarp;
-double preemphasis_coefficient;
+float *last_buffer_val;
+float preemphasis_prewarp;
+float preemphasis_coefficient;
 
 SNDFILE *inf;
+
+soxr_t soxr;
 
 double *alloc_empty_buffer(size_t length) {
     double *p = malloc(length * sizeof(double));
@@ -55,11 +56,7 @@ double *alloc_empty_buffer(size_t length) {
     return p;
 }
 
-
-
-int fm_mpx_open(char *filename, size_t len, int cutoff_freq, int preemphasis_corner_freq, int srate, int nochan) {
-	length = len;
-
+int fm_mpx_open(char *filename, size_t buf_len, int cutoff_freq, int preemphasis_corner_freq, int srate, int nochan) {
 	if(filename != NULL) {
 		// Open the input file
 		SF_INFO sfinfo;
@@ -90,11 +87,23 @@ int fm_mpx_open(char *filename, size_t len, int cutoff_freq, int preemphasis_cor
 		}
 
 		int in_samplerate = sfinfo.samplerate;
-		downsample_factor = 228000. / in_samplerate;
-
-		printf("Input: %d Hz, upsampling factor: %.2f\n", in_samplerate, downsample_factor);
-
 		channels = sfinfo.channels;
+
+		soxr_error_t soxr_error;
+		soxr_quality_spec_t q_spec = soxr_quality_spec(SOXR_LQ, 0);
+		double passband_end = (double)cutoff_freq/in_samplerate;
+		//q_spec.passband_end = passband_end > 0.5 ? passband_end : 0.5;
+		soxr_io_spec_t io_spec = soxr_io_spec((soxr_datatype_t)SOXR_FLOAT32_I, (soxr_datatype_t)SOXR_FLOAT64_I);
+		soxr_runtime_spec_t runtime_spec = soxr_runtime_spec(!1);
+
+		soxr = soxr_create((double)in_samplerate, 228000, channels, &soxr_error, &io_spec, &q_spec, &runtime_spec);
+		if(soxr_error) {
+			fprintf(stderr, "Error: could not create SoX Resampler.\n");
+			return -1;
+		}
+
+		printf("Input: %d Hz, created SoX Resampler.\n", in_samplerate);
+
 		if(channels > 1) {
 			printf("%d channels, generating stereo multiplex.\n", channels);
 		} else {
@@ -102,10 +111,10 @@ int fm_mpx_open(char *filename, size_t len, int cutoff_freq, int preemphasis_cor
 		}
 
 		// Create the preemphasis
-		last_buffer_val = (double*) malloc(sizeof(double)*channels);
+		last_buffer_val = malloc(sizeof(float)*channels);
 		for(int i=0; i<channels; i++) last_buffer_val[i] = 0;
 
-		preemphasis_prewarp = tan(PI*preemphasis_corner_freq/in_samplerate);
+		preemphasis_prewarp = tan(M_PI*preemphasis_corner_freq/in_samplerate);
 		preemphasis_coefficient = (1.0 + (1.0 - preemphasis_prewarp)/(1.0 + preemphasis_prewarp))/2.0;
 		printf("Created preemphasis with cutoff at %.1i Hz\n", preemphasis_corner_freq);
 
@@ -118,14 +127,22 @@ int fm_mpx_open(char *filename, size_t len, int cutoff_freq, int preemphasis_cor
 		// Only store half of the filter since it is symmetric
 		for(int i=1; i<FIR_HALF_SIZE; i++) {
 			low_pass_fir[FIR_HALF_SIZE-1-i] =
-				sin(2 * PI * cutoff_freq * i / 228000) / (PI * i) // sinc
-				* (.54 - .46 * cos(2*PI * (i+FIR_HALF_SIZE) / (2*FIR_HALF_SIZE))); // Hamming window
+				sin(2 * M_PI * cutoff_freq * i / 228000) / (M_PI * i) // sinc
+				//* (.54 - .46 * cos(2*M_PI * (i+FIR_HALF_SIZE) / (2*FIR_HALF_SIZE))); // Hamming window
+				//* (.42 - .5 * cos(2*M_PI * (i+FIR_HALF_SIZE) / (2*FIR_HALF_SIZE)) + .08 * cos(4*M_PI * (i+FIR_HALF_SIZE) / (2*FIR_HALF_SIZE))); // Blackman window
+				* (.35875 - .48829 * cos(2*M_PI * (i+FIR_HALF_SIZE) / (2*FIR_HALF_SIZE)) + .14128 * cos(4*M_PI * (i+FIR_HALF_SIZE) / (2*FIR_HALF_SIZE)) - .01168 * cos(6*M_PI * (i+FIR_HALF_SIZE) / (2*FIR_HALF_SIZE))); // Blackman-Harris window
 		}
 		printf("Created low-pass FIR filter for audio channels, with cutoff at %.1i Hz\n", cutoff_freq);
 
-		audio_pos = downsample_factor;
-		audio_buffer = alloc_empty_buffer(length * channels);
+
+		alength = (size_t)(228000. * buf_len / (in_samplerate + 228000.) + .5);
+		audio_buffer = alloc_empty_buffer(alength * channels);
 		if(audio_buffer == NULL) return -1;
+
+		ilength = buf_len - alength;
+		input_buffer = malloc(ilength * channels * sizeof(float));
+		bzero(input_buffer, ilength * channels * sizeof(float));
+		if(input_buffer == NULL) return -1;
 	}
 	else {
 		inf = NULL;
@@ -137,55 +154,55 @@ int fm_mpx_open(char *filename, size_t len, int cutoff_freq, int preemphasis_cor
 
 // samples provided by this function are in 0..10: they need to be divided by
 // 10 after.
-int fm_mpx_get_samples(double *mpx_buffer, double *rds_buffer, float mpx, int rds, int wait) {
-	if(inf == NULL) {
-		if(rds) get_rds_samples(mpx_buffer, length);
-		return 0;
-	} else {
-		if(rds) get_rds_samples(rds_buffer, length);
-	}
+int fm_mpx_get_samples(double *mpx_buffer, int mpx_buffer_len, float mpx, int rds, int wait) {
 
-	for(int i=0; i<length; i++) {
-		if(audio_pos >= downsample_factor) {
-			audio_pos -= downsample_factor;
+	if(rds) get_rds_samples(mpx_buffer, mpx_buffer_len);
 
-			if(audio_len <= channels) {
-				for(int j=0; j<2; j++) { // one retry
-					audio_len = sf_read_double(inf, audio_buffer, length);
-					if (audio_len < 0) {
-						fprintf(stderr, "Error reading audio\n");
-						return -1;
-					}
-					if(audio_len == 0) {
-						if( sf_seek(inf, 0, SEEK_SET) < 0 ) {
-							if(wait) {
-								return 0;
-							} else {
-								fprintf(stderr, "Could not rewind in audio file, terminating\n");
-                                                        	return -1;
-							}
-						}
-					} else {
-						//apply preemphasis
-						int k;
-						int l;
-						double tmp;
-						for(k=0; k<audio_len; k+=channels) {
-							for(l=0; l<channels; l++) {
-								tmp = audio_buffer[k+l];
-								audio_buffer[k+l] = audio_buffer[k+l] - preemphasis_coefficient*last_buffer_val[l];
-								last_buffer_val[l] = tmp;
-							}
-						}
+	if(inf == NULL) return 0;
 
-						break;
-					}
+	for(size_t i = 0; i < mpx_buffer_len; i++) {
+
+		if(audio_len <= channels) {
+			for(int j=0; j<2; j++) { // one retry
+				audio_len = sf_readf_float(inf, input_buffer, ilength);
+				if (audio_len < 0) {
+					fprintf(stderr, "Error reading audio\n");
+					return -1;
 				}
-				audio_index = 0;
-			} else {
-				audio_index += channels;
-				audio_len -= channels;
+				if(audio_len == 0) {
+					if( sf_seek(inf, 0, SEEK_SET) < 0 ) {
+						if(wait) {
+							printf("waiting\n");
+							return 0;
+						} else {
+							fprintf(stderr, "Could not rewind in audio file, terminating\n");
+							return -1;
+						}
+					}
+				} else {
+					//apply preemphasis
+					int k;
+					int l;
+					float tmp;
+					for(k=0; k<audio_len*channels; k+=channels) {
+						for(l=0; l<channels; l++) {
+							tmp = input_buffer[k+l];
+							input_buffer[k+l] = input_buffer[k+l] - preemphasis_coefficient*last_buffer_val[l];
+							last_buffer_val[l] = tmp;
+						}
+					}
+
+					size_t odone;
+					soxr_process(soxr, input_buffer, audio_len, NULL, audio_buffer, alength, &odone);
+					audio_len = (int)odone;
+
+					break;
+				}
 			}
+			audio_index = 0;
+		} else {
+			audio_index += channels;
+			audio_len--;
 		}
 
 		// First store the current sample(s) into the FIR filter's ring buffer
@@ -227,15 +244,13 @@ int fm_mpx_get_samples(double *mpx_buffer, double *rds_buffer, float mpx, int rd
 		}
 		// End of FIR filter
 
-		if (channels>1) {
-			mpx_buffer[i] =
-			((mpx-2)/2) * out_mono +
-			((mpx-2)/2) * carrier_38[phase_38] * out_stereo +
-			1 * carrier_19[phase_19];
+		if(!rds) mpx_buffer[i] = 0;
 
-			if (rds) {
-				mpx_buffer[i] += rds_buffer[i];
-			}
+		if (channels>1) {
+			mpx_buffer[i] +=
+			((mpx-2)/2) * out_mono +
+			((mpx-2)/2) * out_stereo * carrier_38[phase_38] + //todo: filtering
+			carrier_19[phase_19];
 
 			phase_19++;
 			phase_38++;
@@ -243,17 +258,12 @@ int fm_mpx_get_samples(double *mpx_buffer, double *rds_buffer, float mpx, int rd
 			if(phase_38 >= 6) phase_38 = 0;
 		}
 		else {
-			mpx_buffer[i] =
-			(mpx-1) * out_mono;
-
-			if (rds) {
-				mpx_buffer[i] += rds_buffer[i];
-			}
+			mpx_buffer[i] +=
+			((mpx-1)/2) * out_mono;
 		}
-		audio_pos++;
 	}
 
-	return 0;
+	return mpx_buffer_len;
 }
 
 
@@ -263,6 +273,7 @@ int fm_mpx_close() {
 	}
 
 	if(audio_buffer != NULL) free(audio_buffer);
+	if(soxr != NULL) soxr_delete(soxr);
 
 	return 0;
 }

@@ -438,7 +438,7 @@ int tx(uint32_t carrier_freq, int divider, char *audio_file, int rds, uint16_t p
 
 
 	// Adjust PLLA frequency
-	freq_ctl = (unsigned int)(((carrier_freq*divider)/CLOCK_BASE*((double)(1<<20))));
+	freq_ctl = (unsigned int)(((carrier_freq*divider)/(CLOCK_BASE*(1.+ppm/1.e6))*((double)(1<<20))));
 	clk_reg[PLLA_CTRL] = (0x5a<<24) | (0x21<<12) | (freq_ctl>>20); // Integer part
 	freq_ctl&=0xFFFFF;
 	clk_reg[PLLA_FRAC] = (0x5a<<24) | (freq_ctl&0xFFFFC); // Fractional part
@@ -542,12 +542,11 @@ int tx(uint32_t carrier_freq, int divider, char *audio_file, int rds, uint16_t p
 
 	// Data structures for baseband data
 	double data[DATA_SIZE];
-	double rds_buffer[DATA_SIZE];
 	int data_len = 0;
 	int data_index = 0;
 
 	// Initialize the baseband generator
-	if(fm_mpx_open(audio_file, DATA_SIZE, cutoff, preemphasis_cutoff, srate, nochan) < 0) return 1;
+	if(fm_mpx_open(audio_file, 5000, cutoff, preemphasis_cutoff, srate, nochan) < 0) return 1;
 
 	// Initialize the RDS modulator
 	set_rds_pi(pi);
@@ -590,7 +589,7 @@ int tx(uint32_t carrier_freq, int divider, char *audio_file, int rds, uint16_t p
 
 	printf("Starting to transmit on %3.1f MHz.\n", carrier_freq/1e6);
 
-	double deviation_scale_factor =  0.1 * (divider*(deviation*1000)/(CLOCK_BASE/((double)(1<<20))));
+	double deviation_scale_factor = (divider*(deviation)/((CLOCK_BASE*(1.+ppm/1.e6))/((double)(1<<20))));
 
 	for (;;) {
 
@@ -604,28 +603,36 @@ int tx(uint32_t carrier_freq, int divider, char *audio_file, int rds, uint16_t p
 		if (free_slots < 0)
 			free_slots += NUM_SAMPLES;
 
+		int samples_over_deviation = 0;
+
 		while (free_slots >= SUBSIZE) {
 			// Get more baseband samples if necessary
 			if(data_len == 0) {
-				if(fm_mpx_get_samples(data, rds_buffer, mpx, rds, wait) < 0 ) {
+				if((data_len = fm_mpx_get_samples(data, DATA_SIZE, mpx, rds, wait)) < 0 ) {
 					return 0;
 				}
-				data_len = DATA_SIZE;
 				data_index = 0;
 			}
 
-			double dval = data[data_index]*deviation_scale_factor;
+			double dval = data[data_index]*deviation_scale_factor/10;
+			//if(dval > deviation_scale_factor) printf("Alert: dval = %f\n", dval);
+			if(dval > deviation_scale_factor) {
+				samples_over_deviation++;
+				//dval = deviation_scale_factor;
+			}
 			//int intval = ((int)(dval)); //((int)((dval)) & ~0x3);
 			data_index++;
 			data_len--;
 
-			ctl->sample[last_sample++] = (0x5A << 24 | freq_ctl) + dval;
+			ctl->sample[last_sample++] = (0x5A << 24 | freq_ctl) + (int)round(dval);
 			if (last_sample == NUM_SAMPLES)
 				last_sample = 0;
 
 			free_slots -= SUBSIZE;
 		}
 		last_cb = (uint32_t)mbox.virt_addr + last_sample * sizeof(dma_cb_t) * 2;
+		
+		if(samples_over_deviation) printf("Alert: %d samples over deviation\n", samples_over_deviation);
 
 		usleep(5000);
 	}
@@ -646,7 +653,7 @@ int main(int argc, char **argv) {
 	char *rt = "PiFmAdv: Advanced FM transmitter for the Raspberry Pi";
 	uint16_t pi = 0x1234;
 	float ppm = 0;
-	float deviation = 50;
+	float deviation = 50000;
 	int cutoff = 15000;
 	int preemphasis_cutoff = 3185;
 	int pty = 15;
@@ -654,7 +661,7 @@ int main(int argc, char **argv) {
 	int divc = 0;
 	int power = 7;
 	int gpio = 4;
-	float mpx = 40;
+	float mpx = 20;
 	int wait = 1;
 	int srate = 0;
 	int nochan = 0;
@@ -831,8 +838,8 @@ int main(int argc, char **argv) {
 	{
 		if(carrier_freq * divider > 1400e6) break;
 
-		max_int_multiplier=((int)((double)(carrier_freq + 10 + (deviation * 1000)) * divider * xtal_freq_recip));
-		min_int_multiplier=((int)((double)(carrier_freq - 10 - (deviation * 1000)) * divider * xtal_freq_recip));
+		max_int_multiplier=((int)((double)(carrier_freq + 10 + (deviation)) * divider * xtal_freq_recip));
+		min_int_multiplier=((int)((double)(carrier_freq - 10 - (deviation)) * divider * xtal_freq_recip));
 		if(min_int_multiplier != max_int_multiplier) continue;
 
 		solution_count++;
