@@ -71,7 +71,7 @@ All arguments are optional:
 * `--af` specifies alternative frequencies (AF). Example:  `--af 107.9 --af 99.2`.
 * `--pty` specifies the program type. 0 - 31. Example: `--pty 10` (EU: Pop music). See https://en.wikipedia.org/wiki/Radio_Data_System for more program types.
 * `--tp` specifies if the program carries traffic information.  Example `--tp 0`.
-* `--dev` specifies the frequency deviation (in KHz). Example `--dev 25.0`.
+* `--dev` specifies the frequency deviation (in Hz). Example `--dev 25000`.
 * `--mpx` specifies the output mpx power. Default 30. Example `--mpx 20`.
 * `--power` specifies the drive strenght of gpio pads. 0 = 2mA ... 7 = 16mA. Default 7. Example `--power 5`.
 * `--gpio` specifies the GPIO pin used for transmitting. Available GPIO pins: 4, 20, 32, 34. Default 4. Example `--gpio 32`.
