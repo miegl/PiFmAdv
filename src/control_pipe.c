@@ -15,8 +15,9 @@
 #include "rds.h"
 #include "control_pipe.h"
 
-#define CTL_BUFFER_SIZE 100
+#define CTL_BUFFER_SIZE 70
 
+int fd;
 FILE *f_ctl;
 
 /*
@@ -24,8 +25,8 @@ FILE *f_ctl;
  */
 
 int open_control_pipe(char *filename) {
-	int fd = open(filename, O_RDONLY | O_NONBLOCK);
-    if(fd == -1) return -1;
+	fd = open(filename, O_RDWR | O_NONBLOCK);
+	if(fd == -1) return -1;
 
 	int flags;
 	flags = fcntl(fd, F_GETFL, 0);
@@ -45,79 +46,84 @@ int open_control_pipe(char *filename) {
  */
 
 int poll_control_pipe() {
+	int res = -1;
+
 	static char buf[CTL_BUFFER_SIZE];
 
-    char *res = fgets(buf, CTL_BUFFER_SIZE, f_ctl);
-    if(res == NULL) return -1;
-    if(strlen(res) > 3 && res[2] == ' ') {
-        char *arg = res+3;
-        if(arg[strlen(arg)-1] == '\n') arg[strlen(arg)-1] = 0;
-        if(res[0] == 'P' && res[1] == 'S') {
-            arg[8] = 0;
-            set_rds_ps(arg);
-            printf("PS set to: \"%s\"\n", arg);
-            return CONTROL_PIPE_PS_SET;
-        }
-        if(res[0] == 'R' && res[1] == 'T') {
-            arg[64] = 0;
-            set_rds_rt(arg);
-            printf("RT set to: \"%s\"\n", arg);
-            return CONTROL_PIPE_RT_SET;
-        }
-        if(res[0] == 'T' && res[1] == 'A') {
-            int ta = ( strcmp(arg, "ON") == 0 );
-            set_rds_ta(ta);
-            printf("Set TA to ");
-            if(ta) printf("ON\n"); else printf("OFF\n");
-            return CONTROL_PIPE_TA_SET;
-        }
-	if(res[0] == 'T' && res[1] == 'P') {
-            int tp = ( strcmp(arg, "ON") == 0 );
-            set_rds_tp(tp);
-            printf("Set TP to ");
-            if(tp) printf("ON\n"); else printf("OFF\n");
-            return CONTROL_PIPE_TP_SET;
-        }
-	if(res[0] == 'M' && res[1] == 'S') {
-            int ms = ( strcmp(arg, "ON") == 0 );
-            set_rds_ms(ms);
-            printf("Set MS to ");
-            if(ms) printf("ON\n"); else printf("OFF\n");
-            return CONTROL_PIPE_MS_SET;
-        }
-	if(res[0] == 'A' && res[1] == 'B') {
-            int ab = ( strcmp(arg, "ON") == 0 );
-            set_rds_ab(ab);
-            printf("Set AB to ");
-            if(ab) printf("ON\n"); else printf("OFF\n");
-            return CONTROL_PIPE_AB_SET;
-        }
-    }
+	char *fifo = fgets(buf, CTL_BUFFER_SIZE, f_ctl);
 
-    if(strlen(res) > 4 && res[3] == ' ') {
-        char *arg = res+4;
-        if(arg[strlen(arg)-1] == '\n') arg[strlen(arg)-1] = 0;
-        if(res[0] == 'P' && res[1] == 'T' && res[2] == 'Y') {
-            int pty = atoi(arg);
-            if (pty >= 0 && pty <= 31) {
-                set_rds_pty(pty);
-                if (!pty) {
-                    printf("PTY disabled\n");
-                } else {
-                    printf("PTY set to: %i\n", pty);
-                }
-            }
-            else {
-                printf("Wrong PTY identifier! The PTY range is 0 - 31.\n");
-            }
-            return CONTROL_PIPE_PTY_SET;
-        }
-    }
+	if(fifo == NULL) {
+		return res;
+	}
 
-    return -1;
+	if(strlen(fifo) > 3 && fifo[2] == ' ') {
+		char *arg = fifo+3;
+		if(arg[strlen(arg)-1] == '\n') arg[strlen(arg)-1] = 0;
+		if(fifo[0] == 'P' && fifo[1] == 'S') {
+			arg[8] = 0;
+			set_rds_ps(arg);
+			printf("PS set to: \"%s\"\n", arg);
+			res =  CONTROL_PIPE_PS_SET;
+		}
+		else if(fifo[0] == 'R' && fifo[1] == 'T') {
+			arg[64] = 0;
+			set_rds_rt(arg);
+			printf("RT set to: \"%s\"\n", arg);
+			res = CONTROL_PIPE_RT_SET;
+		}
+		else if(fifo[0] == 'T' && fifo[1] == 'A') {
+			int ta = ( strcmp(arg, "ON") == 0 );
+			set_rds_ta(ta);
+			printf("Set TA to ");
+			if(ta) printf("ON\n"); else printf("OFF\n");
+			res = CONTROL_PIPE_TA_SET;
+		}
+		else if(fifo[0] == 'T' && fifo[1] == 'P') {
+			int tp = ( strcmp(arg, "ON") == 0 );
+			set_rds_tp(tp);
+			printf("Set TP to ");
+			if(tp) printf("ON\n"); else printf("OFF\n");
+			res = CONTROL_PIPE_TP_SET;
+		}
+		else if(fifo[0] == 'M' && fifo[1] == 'S') {
+			int ms = ( strcmp(arg, "ON") == 0 );
+			set_rds_ms(ms);
+			printf("Set MS to ");
+			if(ms) printf("ON\n"); else printf("OFF\n");
+			res = CONTROL_PIPE_MS_SET;
+		}
+		else if(fifo[0] == 'A' && fifo[1] == 'B') {
+			int ab = ( strcmp(arg, "ON") == 0 );
+			set_rds_ab(ab);
+			printf("Set AB to ");
+			if(ab) printf("ON\n"); else printf("OFF\n");
+			res = CONTROL_PIPE_AB_SET;
+		}
+	} else if(strlen(fifo) > 4 && fifo[3] == ' ') {
+		char *arg = fifo+4;
+		if(arg[strlen(arg)-1] == '\n') arg[strlen(arg)-1] = 0;
+		if(fifo[0] == 'P' && fifo[1] == 'T' && fifo[2] == 'Y') {
+			int pty = atoi(arg);
+			if (pty >= 0 && pty <= 31) {
+				set_rds_pty(pty);
+				if (!pty) {
+					printf("PTY disabled\n");
+				} else {
+					printf("PTY set to: %i\n", pty);
+				}
+			}
+			else {
+				printf("Wrong PTY identifier! The PTY range is 0 - 31.\n");
+			}
+			res = CONTROL_PIPE_PTY_SET;
+		}
+	}
+
+	return res;
 }
 
 int close_control_pipe() {
-    if(f_ctl) return fclose(f_ctl);
-    else return 0;
+	if(f_ctl) fclose(f_ctl);
+	if(fd) return close(fd);
+	else return 0;
 }
