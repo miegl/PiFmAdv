@@ -376,7 +376,7 @@ static void *map_peripheral(uint32_t base, uint32_t len)
 
 
 
-int tx(uint32_t carrier_freq, int divider, char *audio_file, int rds, uint16_t pi, char *ps, char *rt, int *af_array, float ppm, float deviation, float mpx, int cutoff, int preemphasis_cutoff, char *control_pipe, int pty, int tp, int power, int gpio, int wait, int srate, int nochan) {
+int tx(uint32_t carrier_freq, int divider, char *audio_file, int rds, uint16_t pi, char *ps, char *rt, int *af_array, float ppm, float deviation, float mpx, int cutoff, int preemphasis_cutoff, char *control_pipe, int pty, int tp, int power, int *gpio, int wait, int srate, int nochan) {
 	// Catch only important signals
 	for (int i = 0; i < 25; i++) {
 		struct sigaction sa;
@@ -466,18 +466,21 @@ int tx(uint32_t carrier_freq, int divider, char *audio_file, int rds, uint16_t p
 	pad_reg[GPIO_PAD_28_45] = 0x5a000018 + power;
 	udelay(100);
 
-	int reg = gpio / 10;
-	int shift = (gpio % 10) * 3;
-	int mode;
-	if(gpio == 20) {
-		mode = 2;
-	} else {
-		mode = 4;
-	}
+	for(int i = 1; i <= gpio[0]; i++) {
+		int reg = gpio[i] / 10;
+		int shift = (gpio[i] % 10) * 3;
+		int mode;
+		if(gpio[i] == 20) {
+			mode = 2;
+		} else {
+			mode = 4;
+		}
 
-	// GPIO needs to be ALT FUNC 0 to output the clock
-	gpio_reg[reg] = (gpio_reg[reg] & ~(7 << shift)) | (mode << shift);
-	udelay(100);
+		// GPIO needs to be ALT FUNC 0 to output the clock
+		gpio_reg[reg] = (gpio_reg[reg] & ~(7 << shift)) | (mode << shift);
+		printf("Outputting signal on GPIO %d.\n", gpio[i]);
+		udelay(100);
+	}
 
 	ctl = (struct control_data_s *) mbox.virt_addr;
 	dma_cb_t *cbp = ctl->cb;
@@ -660,7 +663,7 @@ int main(int argc, char **argv) {
 	int tp = 1;
 	int divc = 0;
 	int power = 7;
-	int gpio = 4;
+	int gpio[5] = {0};
 	float mpx = 20;
 	int wait = 1;
 	int srate = 0;
@@ -752,8 +755,8 @@ int main(int argc, char **argv) {
 				break;
 
 			case 'g': //gpio
-                                gpio = atoi(optarg);
-                                if(gpio != 4 && gpio != 20 && gpio != 32) // && gpio != 34)
+                                gpio[++gpio[0]] = atoi(optarg);
+                                if(atoi(optarg) != 4 && atoi(optarg) != 20 && atoi(optarg) != 32) // && gpio != 34)
                                         fatal("Available GPIO pins: 4,20,32\n");
                                 break;
 
@@ -824,6 +827,8 @@ int main(int argc, char **argv) {
 				break;
 		}
 	}
+
+	if(gpio[0] == 0) gpio[++gpio[0]] = 4;
 
 	alternative_freq[0] = af_size;
 
