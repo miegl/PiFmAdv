@@ -25,6 +25,8 @@ PiFmAdv has been developed for experimentation only. It is not a media center, i
 
 PiFmAdv, depends on the `sndfile` library. To install this library on Debian-like distributions, for instance Raspbian, run `sudo apt-get install libsndfile1-dev`.
 
+PiFmAdv now uses the SoX Resampler for high-quality resampling. On Debian-based distributions, run `sudo apt install libsoxr-dev` to install the dependency.
+
 PiFmAdv also depends on the Linux `rpi-mailbox` driver, so you need a recent Linux kernel. The Raspbian releases from August 2015 have this.
 
 **Important.** The binaries compiled for the Raspberry Pi 1 are not compatible with the Raspberry Pi 2/3, and conversely. Always re-compile when switching models, so do not skip the `make clean` step in the instructions below!
@@ -74,7 +76,7 @@ All arguments are optional:
 * `--dev` specifies the frequency deviation (in Hz). Example `--dev 25000`.
 * `--mpx` specifies the output mpx power. Default 30. Example `--mpx 20`.
 * `--power` specifies the drive strenght of gpio pads. 0 = 2mA ... 7 = 16mA. Default 7. Example `--power 5`.
-* `--gpio` specifies the GPIO pin used for transmitting. Available GPIO pins: 4, 20, 32, 34. Default 4. Example `--gpio 32`.
+* `--gpio` specifies the GPIO pin used for transmitting. Can be specified multiple times to transmit on multiple pins at once. Available GPIO pins: 4, 20, 32. Default 4. Example `--gpio 20`.
 * `--cutoff` specifies the cutoff frequency (in Hz) used by PiFmAdv's internal lowpass filter. Values greater than 15000 are not compliant. Use carefully.
 * `--preemph` specifies which preemph should be used, since it differs from location. For Europe choose 'eu', for the US choose 'us'.
 * `--ctl` specifies a named pipe (FIFO) to use as a control channel to change PS and RT at run-time (see below).
