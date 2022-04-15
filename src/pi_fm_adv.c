@@ -35,6 +35,7 @@
 #define DRAM_PHYS_BASE                  0x40000000
 #define MEM_FLAG                        0x0c
 #define CLOCK_BASE			19.2e6
+#define PLLD_CLOCK			500e6
 #define DMA_CHANNEL			14
 #elif (RASPI) == 2                      // Raspberry Pi 2 & 3
 #define PERIPH_VIRT_BASE                0x3f000000
@@ -42,13 +43,15 @@
 #define DRAM_PHYS_BASE                  0xc0000000
 #define MEM_FLAG                        0x04
 #define CLOCK_BASE			19.2e6
+#define PLLD_CLOCK			500e6
 #define DMA_CHANNEL			14
 #elif (RASPI) == 4                      // Raspberry Pi 4
 #define PERIPH_VIRT_BASE                0xfe000000
 #define PERIPH_PHYS_BASE                0x7e000000
 #define DRAM_PHYS_BASE                  0xc0000000
-#define MEM_FLAG                        0x04
+#define MEM_FLAG			0x04
 #define CLOCK_BASE			54.0e6
+#define PLLD_CLOCK			750e6
 #define DMA_CHANNEL			6
 #else
 #error Unknown Raspberry Pi version (variable RASPI)
@@ -89,6 +92,7 @@
 #define CORECLK_DIV                     (0x0c/4)
 #define GPCLK_CNTL                      (0x70/4)
 #define GPCLK_DIV                       (0x74/4)
+#define GPCLK_STEP                      (0x08/4)
 #define EMMCCLK_CNTL                    (0x1C0/4)
 #define EMMCCLK_DIV                     (0x1C4/4)
 
@@ -295,18 +299,10 @@ static void terminate(int num)
 {
     // Stop outputting and generating the clock.
     if (clk_reg && gpio_reg && mbox.virt_addr) {
-        // Set GPIOs to be an output (instead of ALT FUNC 0, which is the clock).
-        gpio_reg[0] = (gpio_reg[0] & ~(7 << 12)) | (1 << 12); //GPIO4
-	udelay(10);
-	gpio_reg[2] = (gpio_reg[2] & ~(7 << 0)) | (1 << 0); //GPIO20
-	udelay(10);
-	gpio_reg[3] = (gpio_reg[3] & ~(7 << 6)) | (1 << 6); //GPIO32
-	udelay(10);
-	//gpio_reg[3] = (gpio_reg[3] & ~(7 << 12)) | (1 << 12); //GPIO34 - Doesn't work on Pi 3, 3B+, Zero W
-	//udelay(10);
-
         // Disable the clock generator.
         clk_reg[GPCLK_CNTL] = 0x5A;
+        clk_reg[GPCLK_CNTL + GPCLK_STEP*1] = 0x5A;
+        clk_reg[GPCLK_CNTL + GPCLK_STEP*2] = 0x5A;
     }
 
     if (dma_reg && mbox.virt_addr) {
@@ -359,7 +355,7 @@ static uint32_t mem_phys_to_virt(uint32_t phys)
     return phys - (uint32_t)mbox.bus_addr + (uint32_t)mbox.virt_addr;
 }
 
-static void *map_peripheral(uint32_t base, uint32_t len)
+static volatile void *map_peripheral(uint32_t base, uint32_t len)
 {
     int fd = open("/dev/mem", O_RDWR | O_SYNC);
     void * vaddr;
@@ -376,7 +372,7 @@ static void *map_peripheral(uint32_t base, uint32_t len)
 
 
 
-int tx(uint32_t carrier_freq, int divider, char *audio_file, int rds, uint16_t pi, char *ps, char *rt, int *af_array, float ppm, float deviation, float mpx, int cutoff, int preemphasis_cutoff, char *control_pipe, int pty, int tp, int power, int *gpio, int wait, int srate, int nochan) {
+int tx(uint32_t carrier_freq, int divider, char *audio_file, int rds, uint16_t pi, char *ps, char *rt, int *af_array, float ppm, float deviation, float mpx, int cutoff, int preemphasis_cutoff, char *control_pipe, int pty, int tp, int power, int pll, int gpclk, int *gpio, int wait, int srate, int nochan) {
 	// Catch only important signals
 	for (int i = 0; i < 25; i++) {
 		struct sigaction sa;
@@ -413,52 +409,86 @@ int tx(uint32_t carrier_freq, int divider, char *audio_file, int rds, uint16_t p
 	}
 	printf("virt_addr = %p\n", mbox.virt_addr);
 
-	clk_reg[GPCLK_CNTL] = (0x5a<<24) | (1<<4) | (4);
+	clk_reg[GPCLK_CNTL] = (0x5a<<24) | (pll);
 	udelay(100);
 
-	clk_reg[CM_PLLA] = 0x5A00022A; // Enable PLLA_PER
+	if(pll == 5) {
+		clk_reg[CORECLK_DIV] = (0x5a<<24) | (4<<12);
+		udelay(100);
+		clk_reg[CORECLK_CNTL] = (0x5a<<24) | (1<<4) | (4);
+		udelay(100);
+	}
+
+	int emmcclktmp = clk_reg[EMMCCLK_CNTL];
+	clk_reg[EMMCCLK_CNTL] = (0xF0F&emmcclktmp) | (0x5a<<24);
+	udelay(100);
+	clk_reg[EMMCCLK_CNTL] = (0xF00&emmcclktmp) | (0x5a<<24) | (6);
+	udelay(100);
+	clk_reg[EMMCCLK_CNTL] = (0xF00&emmcclktmp) | (0x5a<<24) | (1<<4) | (6);
+	udelay(100);
+
+	if(pll == 4) clk_reg[CM_PLLA] = (0x5a<<24) | 0x22a; // Enable PLLA_PER
+	else if(pll == 5) clk_reg[CM_PLLC] = (0x5a<<24) | 0x22a; // Enable PLLC_PER
+	udelay(100);
+
+	int per_div = 1;
+#if (RASPI) == 4
+	per_div = 2;
+#endif
+
+	if(pll == 4) {
+		clk_reg[PLLA_CORE] = (0x5a<<24) | (1<<8); // Disable
+		clk_reg[PLLA_PER] = (0x5a<<24) | per_div;
+	} else if(pll == 5) {
+		clk_reg[PLLC_CORE0] = (0x5a<<24) | (1<<8); // Disable
+		clk_reg[PLLC_PER] = (0x5a<<24) | per_div;
+	}
+	udelay(100);
+
+	clk_reg[GPCLK_DIV + GPCLK_STEP*gpclk]  = (0x5a<<24) | (divider<<12);
 	udelay(100);
 	
 	int ana[4];
 	for (int i = 3; i >= 0; i--)
 	{
-		ana[i] = clk_reg[(A2W_PLLA_ANA0) + i];
+		if(pll == 4) ana[i] = clk_reg[(A2W_PLLA_ANA0) + i];
+		else if(pll == 5) ana[i] = clk_reg[(A2W_PLLC_ANA0) + i];
+		udelay(100);
+		ana[i] &= ~(1<<14);
 	}
 
-	ana[1]&=~(1<<14);
+	ana[1] |= (0 << 14);
 	for (int i = 3; i >= 0; i--)
 	{
-		clk_reg[(A2W_PLLA_ANA0) + i] = (0x5A << 24) | ana[i];
+		if(pll == 4) clk_reg[(A2W_PLLA_ANA0) + i] = (0x5A << 24) | ana[i];
+		else if(pll == 5) clk_reg[(A2W_PLLC_ANA0) + i] = (0x5A << 24) | ana[i];
+		udelay(100);
 	}
-	udelay(100);
 
-	clk_reg[PLLA_CORE] = (0x5a<<24) | (1<<8); // Disable
-	clk_reg[PLLA_PER] = 0x5A000001; // Div
-	udelay(100);
-
-
-	// Adjust PLLA frequency
+	// Adjust PLLC frequency
 	freq_ctl = (unsigned int)(((carrier_freq*divider)/(CLOCK_BASE*(1.+ppm/1.e6))*((double)(1<<20))));
-	clk_reg[PLLA_CTRL] = (0x5a<<24) | (0x21<<12) | (freq_ctl>>20); // Integer part
+	if(pll == 4) clk_reg[PLLA_CTRL] = (0x5a<<24) | (0x21<<12) | (freq_ctl>>20); // Integer part
+	else if(pll == 5) clk_reg[PLLC_CTRL] = (0x5a<<24) | (0x21<<12) | (freq_ctl>>20); // Integer part
 	freq_ctl&=0xFFFFF;
-	clk_reg[PLLA_FRAC] = (0x5a<<24) | (freq_ctl&0xFFFFC); // Fractional part
+	if(pll == 4) clk_reg[PLLA_FRAC] = (0x5a<<24) | (freq_ctl&0xFFFFF); // Fractional part
+	else if(pll == 5) clk_reg[PLLC_FRAC] = (0x5a<<24) | (freq_ctl&0xFFFFF); // Fractional part
 	udelay(100);
 
-	if ((clk_reg[CM_LOCK] & CM_LOCK_FLOCKA) > 0)
-		printf("Master PLLA Locked\n");
-	else
-		printf("Warning: Master PLLA NOT Locked\n");
+	if(pll == 4) {
+		if((clk_reg[CM_LOCK] & CM_LOCK_FLOCKA) > 0)
+			printf("Master PLLA Locked\n");
+		else
+			printf("Warning: Master PLLA NOT Locked\n");
+	} else if(pll == 5) {
+		if((clk_reg[CM_LOCK] & CM_LOCK_FLOCKC) > 0)
+			printf("Master PLLC Locked\n");
+		else
+			printf("Warning: Master PLLC NOT Locked\n");
+	}
 
-	// Program GPCLK integer division
-	//int clktmp;
-	//clktmp = clk_reg[GPCLK_CNTL];
-	//clk_reg[GPCLK_CNTL] = (0xF0F&clktmp) | (0x5a<<24); // Clear run
-	//udelay(100);
-	clk_reg[GPCLK_DIV]  = (0x5a<<24) | (divider<<12);
+	clk_reg[GPCLK_CNTL + GPCLK_STEP*gpclk] = (0x5a<<24) | (1<<4) | (pll);
 	udelay(100);
-	clk_reg[GPCLK_CNTL] = (0x5a<<24) | (4); // Source = PLLA (4)
-	udelay(100);
-	clk_reg[GPCLK_CNTL] = (0x5a<<24) | (1<<4) | (4); // Run, Source = PLLA (4)
+	clk_reg[GPCLK_CNTL + GPCLK_STEP*gpclk] = (0x5a<<24) | (1<<4) | (pll);
 	udelay(100);
 
 	// Drive Strength: 0 = 2mA, 7 = 16mA. Ref: https://www.scribd.com/doc/101830961/GPIO-Pads-Control2
@@ -469,15 +499,11 @@ int tx(uint32_t carrier_freq, int divider, char *audio_file, int rds, uint16_t p
 	for(int i = 1; i <= gpio[0]; i++) {
 		int reg = gpio[i] / 10;
 		int shift = (gpio[i] % 10) * 3;
-		int mode;
-		if(gpio[i] == 20) {
-			mode = 2;
-		} else {
-			mode = 4;
-		}
+		int alt = 4; // alt func 0
+		if(gpio[i] == 20 || gpio[i] == 21) alt = 2; // alt func 5
+		else if(gpio[i] == 49 || gpio[i] == 50 || gpio[i] == 51) alt = 5; // alt func 1
 
-		// GPIO needs to be ALT FUNC 0 to output the clock
-		gpio_reg[reg] = (gpio_reg[reg] & ~(7 << shift)) | (mode << shift);
+		gpio_reg[reg] = (gpio_reg[reg] & ~(7 << shift)) | (alt << shift);
 		printf("Outputting signal on GPIO %d.\n", gpio[i]);
 		udelay(100);
 	}
@@ -490,7 +516,8 @@ int tx(uint32_t carrier_freq, int divider, char *audio_file, int rds, uint16_t p
 		// Write a frequency sample
 		cbp->info = BCM2708_DMA_NO_WIDE_BURSTS | BCM2708_DMA_WAIT_RESP;
 		cbp->src = mem_virt_to_phys(ctl->sample + i);
-		cbp->dst = PERIPH_PHYS_BASE + (PLLA_FRAC<<2) + CLK_BASE_OFFSET;
+		if(pll == 4) cbp->dst = PERIPH_PHYS_BASE + (PLLA_FRAC<<2) + CLK_BASE_OFFSET;
+		else if(pll == 5) cbp->dst = PERIPH_PHYS_BASE + (PLLC_FRAC<<2) + CLK_BASE_OFFSET;
 		cbp->length = 4;
 		cbp->stride = 0;
 		cbp->next = mem_virt_to_phys(cbp + 1);
@@ -508,19 +535,19 @@ int tx(uint32_t carrier_freq, int divider, char *audio_file, int rds, uint16_t p
 	cbp->next = mem_virt_to_phys(mbox.virt_addr);
 
 	// Here we define the rate at which we want to update the GPCLK control register
-	double srdivider = (((double)carrier_freq*divider/1e3)/(2*228*(1.+ppm/1.e6)));
+	double srdivider = (((double)PLLD_CLOCK)/(1e3*2*228*(1.+ppm/1.e6)));
 	uint32_t idivider = (uint32_t)srdivider;
 	uint32_t fdivider = (uint32_t)((srdivider - idivider)*pow(2, 12));
 
 	printf("PPM correction is %.4f, divider is %.4f (%d + %d*2^-12).\n", ppm, srdivider, idivider, fdivider);
-
+	
 	pwm_reg[PWM_CTL] = 0;
 	udelay(100);
-	clk_reg[PWMCLK_CNTL] = (0x5a<<24) | (4); // Source = PLLA & disable
+	clk_reg[PWMCLK_CNTL] = (0x5a<<24) | (6); // Source = PLLD & disable
 	udelay(100);
 	clk_reg[PWMCLK_DIV] = (0x5a<<24) | (idivider<<12) | fdivider;
 	udelay(100);
-	clk_reg[PWMCLK_CNTL] = (0x5a<<24) | (1<<9) | (1<<4) | (4); // Source = PLLA, enable, MASH setting 1
+	clk_reg[PWMCLK_CNTL] = (0x5a<<24) | (1<<9) | (1<<4) | (6); // Source = PLLD, enable, MASH setting 1
 	udelay(100);
 	pwm_reg[PWM_RNG1] = 2;
 	udelay(100);
@@ -529,7 +556,6 @@ int tx(uint32_t carrier_freq, int divider, char *audio_file, int rds, uint16_t p
 	pwm_reg[PWM_CTL] = PWMCTL_CLRF;
 	udelay(100);
 	pwm_reg[PWM_CTL] = PWMCTL_USEF1 | PWMCTL_MODE1 | PWMCTL_PWEN1 | PWMCTL_MSEN1;
-	//pwm_reg[PWM_CTL] = PWMCTL_USEF1 | PWMCTL_PWEN1;
 	udelay(100);
 
 	// Initialise the DMA
@@ -663,7 +689,9 @@ int main(int argc, char **argv) {
 	int tp = 1;
 	int divc = 0;
 	int power = 7;
+	int gpclk = 0;
 	int gpio[5] = {0};
+	int pll = 5;
 	float mpx = 20;
 	int wait = 1;
 	int srate = 0;
@@ -681,7 +709,9 @@ int main(int argc, char **argv) {
 		{"div", 	required_argument, NULL, 'D'},
 		{"mpx", 	required_argument, NULL, 'm'},
 		{"power", 	required_argument, NULL, 'w'},
+		{"gpclk",	required_argument, NULL, 'G'},
 		{"gpio",	required_argument, NULL, 'g'},
+		{"pll",		required_argument, NULL, 'l'},
 		{"wait",	required_argument, NULL, 'W'},
 		{"srate",	required_argument, NULL, 'S'},
 		{"nochan",	required_argument, NULL, 'N'},
@@ -754,10 +784,18 @@ int main(int argc, char **argv) {
 					fatal("Output power has to be set in range of 0 - 7\n");
 				break;
 
+			case 'G': //gpclk
+                                gpclk = atoi(optarg);
+                                break;
+
 			case 'g': //gpio
                                 gpio[++gpio[0]] = atoi(optarg);
-                                if(atoi(optarg) != 4 && atoi(optarg) != 20 && atoi(optarg) != 32) // && gpio != 34)
-                                        fatal("Available GPIO pins: 4,20,32\n");
+                                break;
+
+			case 'l': //pll
+				if(strcmp("a", optarg) == 0) pll = 4;
+				else if(strcmp("c", optarg) == 0) pll = 5;
+				else fatal("Bad PLL value, accepted values are \"a\", \"c\".");
                                 break;
 
 			case 'W': //wait
@@ -811,7 +849,8 @@ int main(int argc, char **argv) {
 				fatal("Help:\n"
 				      "Syntax: pi_fm_adv [--audio (-a) file] [--freq (-f) frequency] [--dev (-d) deviation] [--ppm (-p) ppm-error]\n"
 				      "                  [--cutoff (-c) cutoff-freq] [--preemph (-P) preemphasis] [--div (-D) divider] \n"
-				      "                  [--mpx (-m) mpx-power] [--power (-w) output-power] [--gpio (-g) gpio-pin] [--wait (-W) wait-switch]\n"
+				      "                  [--mpx (-m) mpx-power] [--power (-w) output-power] [--gpio (-g) gpio-pin]\n" 
+				      "                  [--gpclk (-G) gpclk {0, 1, 2}] [--pll (-l) PLL {a, c}] [--wait (-W) wait-switch]\n"
 				      "                  [--rds rds-switch] [--pi pi-code] [--ps ps-text] [--rt radiotext] [--tp traffic-program]\n"
 				      "                  [--pty program-type] [--af alternative-freq] [--ctl (-C) control-pipe]\n");
 
@@ -877,7 +916,7 @@ int main(int argc, char **argv) {
 
 	printf("Carrier: %3.2f Mhz, VCO: %4.1f MHz, Multiplier: %f, Divider: %d\n", carrier_freq/1e6, (double)carrier_freq * best_divider / 1e6, carrier_freq * best_divider * xtal_freq_recip, best_divider);
 	
-	int errcode = tx(carrier_freq, best_divider, audio_file, rds, pi, ps, rt, alternative_freq, ppm, deviation, mpx, cutoff, preemphasis_cutoff, control_pipe, pty, tp, power, gpio, wait, srate, nochan);
+	int errcode = tx(carrier_freq, best_divider, audio_file, rds, pi, ps, rt, alternative_freq, ppm, deviation, mpx, cutoff, preemphasis_cutoff, control_pipe, pty, tp, power, pll, gpclk, gpio, wait, srate, nochan);
 
 	terminate(errcode);
 }

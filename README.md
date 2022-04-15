@@ -76,7 +76,9 @@ All arguments are optional:
 * `--dev` specifies the frequency deviation (in Hz). Example `--dev 25000`.
 * `--mpx` specifies the output mpx power. Default 30. Example `--mpx 20`.
 * `--power` specifies the drive strenght of gpio pads. 0 = 2mA ... 7 = 16mA. Default 7. Example `--power 5`.
-* `--gpio` specifies the GPIO pin used for transmitting. Can be specified multiple times to transmit on multiple pins at once. Available GPIO pins: 4, 20, 32. Default 4. Example `--gpio 20`.
+* `--gpclk` specifies the General Purpose Clock (GPCLK) to use. Avaliable options are 0, 1 and 2.
+* `--gpio` specifies the GPIO pin used for transmitting. Can be specified multiple times to transmit on multiple pins at once. Default 4. Can be used in combination with `--gpclk`. Example `--gpio 20`.
+* `--pll` specifies the PLL to modulate. PLLC is used by default, PLLA doesn't seem to work on Raspberry Pi 4. Available options: `a` and `c`.
 * `--cutoff` specifies the cutoff frequency (in Hz) used by PiFmAdv's internal lowpass filter. Values greater than 15000 are not compliant. Use carefully.
 * `--preemph` specifies which preemph should be used, since it differs from location. For Europe choose 'eu', for the US choose 'us'.
 * `--ctl` specifies a named pipe (FIFO) to use as a control channel to change PS and RT at run-time (see below).

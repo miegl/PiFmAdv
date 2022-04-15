@@ -141,8 +141,8 @@ int fm_mpx_open(char *filename, size_t buf_len, int cutoff_freq, int preemphasis
 
 		ilength = buf_len - alength;
 		input_buffer = malloc(ilength * channels * sizeof(float));
-		bzero(input_buffer, ilength * channels * sizeof(float));
 		if(input_buffer == NULL) return -1;
+		bzero(input_buffer, ilength * channels * sizeof(float));
 	}
 	else {
 		inf = NULL;
