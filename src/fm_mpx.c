@@ -91,7 +91,7 @@ int fm_mpx_open(char *filename, size_t buf_len, int cutoff_freq, int preemphasis
 
 		soxr_error_t soxr_error;
 		soxr_quality_spec_t q_spec = soxr_quality_spec(SOXR_LQ, 0);
-		double passband_end = (double)cutoff_freq/in_samplerate;
+		//double passband_end = (double)cutoff_freq/in_samplerate;
 		//q_spec.passband_end = passband_end > 0.5 ? passband_end : 0.5;
 		soxr_io_spec_t io_spec = soxr_io_spec((soxr_datatype_t)SOXR_FLOAT32_I, (soxr_datatype_t)SOXR_FLOAT64_I);
 		soxr_runtime_spec_t runtime_spec = soxr_runtime_spec(!1);

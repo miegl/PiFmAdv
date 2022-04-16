@@ -372,7 +372,7 @@ static volatile void *map_peripheral(uint32_t base, uint32_t len)
 
 
 
-int tx(uint32_t carrier_freq, int divider, char *audio_file, int rds, uint16_t pi, char *ps, char *rt, int *af_array, float ppm, float deviation, float mpx, int cutoff, int preemphasis_cutoff, char *control_pipe, int pty, int tp, int power, int pll, int gpclk, int *gpio, int wait, int srate, int nochan) {
+int tx(uint32_t carrier_freq, int divider, int prediv, char *audio_file, int rds, uint16_t pi, char *ps, char *rt, int *af_array, float ppm, float deviation, float mpx, int cutoff, int preemphasis_cutoff, char *control_pipe, int pty, int tp, int power, int pll, int gpclk, int *gpio, int wait, int srate, int nochan) {
 	// Catch only important signals
 	for (int i = 0; i < 25; i++) {
 		struct sigaction sa;
@@ -431,17 +431,12 @@ int tx(uint32_t carrier_freq, int divider, char *audio_file, int rds, uint16_t p
 	else if(pll == 5) clk_reg[CM_PLLC] = (0x5a<<24) | 0x22a; // Enable PLLC_PER
 	udelay(100);
 
-	int per_div = 1;
-#if (RASPI) == 4
-	per_div = 2;
-#endif
-
 	if(pll == 4) {
 		clk_reg[PLLA_CORE] = (0x5a<<24) | (1<<8); // Disable
-		clk_reg[PLLA_PER] = (0x5a<<24) | per_div;
+		clk_reg[PLLA_PER] = (0x5a<<24) | prediv;
 	} else if(pll == 5) {
 		clk_reg[PLLC_CORE0] = (0x5a<<24) | (1<<8); // Disable
-		clk_reg[PLLC_PER] = (0x5a<<24) | per_div;
+		clk_reg[PLLC_PER] = (0x5a<<24) | prediv;
 	}
 	udelay(100);
 
@@ -466,7 +461,7 @@ int tx(uint32_t carrier_freq, int divider, char *audio_file, int rds, uint16_t p
 	}
 
 	// Adjust PLLC frequency
-	freq_ctl = (unsigned int)(((carrier_freq*divider)/(CLOCK_BASE*(1.+ppm/1.e6))*((double)(1<<20))));
+	freq_ctl = (unsigned int)(((carrier_freq*divider*prediv)/(CLOCK_BASE*(1.+ppm/1.e6))*((double)(1<<20))));
 	if(pll == 4) clk_reg[PLLA_CTRL] = (0x5a<<24) | (0x21<<12) | (freq_ctl>>20); // Integer part
 	else if(pll == 5) clk_reg[PLLC_CTRL] = (0x5a<<24) | (0x21<<12) | (freq_ctl>>20); // Integer part
 	freq_ctl&=0xFFFFF;
@@ -618,7 +613,7 @@ int tx(uint32_t carrier_freq, int divider, char *audio_file, int rds, uint16_t p
 
 	printf("Starting to transmit on %3.1f MHz.\n", carrier_freq/1e6);
 
-	double deviation_scale_factor = (divider*(deviation)/((CLOCK_BASE*(1.+ppm/1.e6))/((double)(1<<20))));
+	double deviation_scale_factor = (divider*prediv*(deviation)/((CLOCK_BASE*(1.+ppm/1.e6))/((double)(1<<20))));
 
 	for (;;) {
 
@@ -644,12 +639,10 @@ int tx(uint32_t carrier_freq, int divider, char *audio_file, int rds, uint16_t p
 			}
 
 			double dval = data[data_index]*deviation_scale_factor/10;
-			//if(dval > deviation_scale_factor) printf("Alert: dval = %f\n", dval);
 			if(dval > deviation_scale_factor) {
 				samples_over_deviation++;
 				//dval = deviation_scale_factor;
 			}
-			//int intval = ((int)(dval)); //((int)((dval)) & ~0x3);
 			data_index++;
 			data_len--;
 
@@ -667,6 +660,53 @@ int tx(uint32_t carrier_freq, int divider, char *audio_file, int rds, uint16_t p
 	}
 
 	return 0;
+}
+
+int findDivider(uint32_t carrier_freq, float deviation, double xtal_freq_recip) {
+	int divider, best_divider = 0;
+	int min_int_multiplier, max_int_multiplier;
+	int int_multiplier;
+	double frac_multiplier;
+	int fom, best_fom = 0;
+	int solution_count = 0;
+	for(divider = 2; divider < 50; divider += 1)
+	{
+		if(carrier_freq * divider > 1400e6) break;
+
+		max_int_multiplier=((int)((double)(carrier_freq + 10 + (deviation)) * divider * xtal_freq_recip));
+		min_int_multiplier=((int)((double)(carrier_freq - 10 - (deviation)) * divider * xtal_freq_recip));
+		if(min_int_multiplier != max_int_multiplier) continue;
+
+		solution_count++;
+		fom = 0;
+
+		if(carrier_freq * divider >  1000e6) fom++; // Prefer frequencies close to 1.1 Ghz
+		if(carrier_freq * divider < 1200e6) fom++;
+
+		if(carrier_freq * divider >  900e6) fom++;
+		if(carrier_freq * divider < 1300e6) fom++;
+
+		if(carrier_freq * divider >  800e6) fom++;
+		if(carrier_freq * divider < 1400e6) fom++;
+
+		frac_multiplier = ((double)(carrier_freq) * divider * xtal_freq_recip);
+		int_multiplier = (int)frac_multiplier;
+		frac_multiplier = frac_multiplier - int_multiplier;
+		if((frac_multiplier > 0.3) && (frac_multiplier < 0.7)) fom++; // Prefer mulipliers away from integer boundaries
+		if((frac_multiplier > 0.2) && (frac_multiplier < 0.8)) fom++;
+
+		if(fom > best_fom) // Best match so far
+		{
+			best_fom = fom;
+			best_divider = divider;
+		}
+	}
+
+	if(!solution_count & !best_divider) {
+		fatal("No tuning solution found. You can specify the divider manually by setting the -div parameter.\n");
+	}
+
+	return best_divider;
 }
 
 int main(int argc, char **argv) {
@@ -688,6 +728,12 @@ int main(int argc, char **argv) {
 	int pty = 15;
 	int tp = 1;
 	int divc = 0;
+	int prediv = 1;
+
+#if (RASPI) == 4
+	prediv = 2;
+#endif
+
 	int power = 7;
 	int gpclk = 0;
 	int gpio[5] = {0};
@@ -707,6 +753,7 @@ int main(int argc, char **argv) {
 		{"cutoff", 	required_argument, NULL, 'c'},
 		{"preemph", 	required_argument, NULL, 'P'},
 		{"div", 	required_argument, NULL, 'D'},
+		{"prediv", 	required_argument, NULL, 'r'},
 		{"mpx", 	required_argument, NULL, 'm'},
 		{"power", 	required_argument, NULL, 'w'},
 		{"gpclk",	required_argument, NULL, 'G'},
@@ -772,6 +819,10 @@ int main(int argc, char **argv) {
 
 			case 'D': //div
 				divc = atoi(optarg);
+				break;
+
+			case 'r': //prediv
+				prediv = atoi(optarg);
 				break;
 
 			case 'm': //mpx
@@ -849,7 +900,7 @@ int main(int argc, char **argv) {
 				fatal("Help:\n"
 				      "Syntax: pi_fm_adv [--audio (-a) file] [--freq (-f) frequency] [--dev (-d) deviation] [--ppm (-p) ppm-error]\n"
 				      "                  [--cutoff (-c) cutoff-freq] [--preemph (-P) preemphasis] [--div (-D) divider] \n"
-				      "                  [--mpx (-m) mpx-power] [--power (-w) output-power] [--gpio (-g) gpio-pin]\n" 
+				      "                  [--prediv (-r) prediv] [--mpx (-m) mpx-power] [--power (-w) output-power] [--gpio (-g) gpio-pin]\n" 
 				      "                  [--gpclk (-G) gpclk {0, 1, 2}] [--pll (-l) PLL {a, c}] [--wait (-W) wait-switch]\n"
 				      "                  [--rds rds-switch] [--pi pi-code] [--ps ps-text] [--rt radiotext] [--tp traffic-program]\n"
 				      "                  [--pty program-type] [--af alternative-freq] [--ctl (-C) control-pipe]\n");
@@ -872,51 +923,11 @@ int main(int argc, char **argv) {
 	alternative_freq[0] = af_size;
 
 	double xtal_freq_recip=1.0/CLOCK_BASE;
-	int divider, best_divider = 0;
-	int min_int_multiplier, max_int_multiplier;
-	int int_multiplier;
-	double frac_multiplier;
-	int fom, best_fom = 0;
-	int solution_count = 0;
-	for(divider = 2; divider < 50; divider += 1)
-	{
-		if(carrier_freq * divider > 1400e6) break;
+	if(divc == 0) divc = findDivider(carrier_freq*prediv, deviation, xtal_freq_recip);
 
-		max_int_multiplier=((int)((double)(carrier_freq + 10 + (deviation)) * divider * xtal_freq_recip));
-		min_int_multiplier=((int)((double)(carrier_freq - 10 - (deviation)) * divider * xtal_freq_recip));
-		if(min_int_multiplier != max_int_multiplier) continue;
-
-		solution_count++;
-		fom = 0;
-
-		if(carrier_freq * divider >  900e6) fom++; // Prefer frequencies close to 1.0 Ghz
-		if(carrier_freq * divider < 1100e6) fom++;
-
-		if(carrier_freq * divider >  800e6) fom++;
-		if(carrier_freq * divider < 1200e6) fom++;
-
-		frac_multiplier = ((double)(carrier_freq) * divider * xtal_freq_recip);
-		int_multiplier = (int)frac_multiplier;
-		frac_multiplier = frac_multiplier - int_multiplier;
-		if((frac_multiplier > 0.2) && (frac_multiplier < 0.8)) fom++; // Prefer mulipliers away from integer boundaries
-
-		if(fom > best_fom) // Best match so far
-		{
-			best_fom = fom;
-			best_divider = divider;
-		}
-	}
-
-	if(divc) {
-		best_divider = divc;
-	}
-	else if(!solution_count & !best_divider) {
-		fatal("No tuning solution found. You can specify the divider manually by setting the -div parameter.\n");
-	}
-
-	printf("Carrier: %3.2f Mhz, VCO: %4.1f MHz, Multiplier: %f, Divider: %d\n", carrier_freq/1e6, (double)carrier_freq * best_divider / 1e6, carrier_freq * best_divider * xtal_freq_recip, best_divider);
+	printf("Carrier: %3.2f Mhz, VCO: %4.1f MHz, Multiplier: %f, Divider: %d\n", carrier_freq/1e6, (double)carrier_freq*prediv * divc / 1e6, carrier_freq*prediv * divc * xtal_freq_recip, divc);
 	
-	int errcode = tx(carrier_freq, best_divider, audio_file, rds, pi, ps, rt, alternative_freq, ppm, deviation, mpx, cutoff, preemphasis_cutoff, control_pipe, pty, tp, power, pll, gpclk, gpio, wait, srate, nochan);
+	int errcode = tx(carrier_freq, divc, prediv, audio_file, rds, pi, ps, rt, alternative_freq, ppm, deviation, mpx, cutoff, preemphasis_cutoff, control_pipe, pty, tp, power, pll, gpclk, gpio, wait, srate, nochan);
 
 	terminate(errcode);
 }
