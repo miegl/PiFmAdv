@@ -16,6 +16,14 @@ else ifeq ($(PCPUI), 11)
 else ifeq ($(UNAME), armv7l)
 	CFLAGS = $(STD_CFLAGS) -march=armv7-a -mtune=arm1176jzf-s -mfloat-abi=hard -mfpu=vfp -ffast-math -DRASPI=2
 	TARGET = pi2
+else ifeq ($(UNAME), aarch64)
+	ifeq ($(PCPUI), 14)
+		CFLAGS = $(STD_CFLAGS) -march=armv8-a -ffast-math -DRASPI=4
+		TARGET = pi4
+	else
+		CFLAGS = $(STD_CFLAGS) -march=armv8-a -ffast-math -DRASPI=2
+		TARGET = pi2
+	endif
 else
 	CFLAGS = $(STD_CFLAGS)
 	TARGET = other
