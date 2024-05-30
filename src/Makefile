@@ -3,19 +3,22 @@ STD_CFLAGS = -Wall -Wno-multichar -std=gnu99 -c -O2
 
 # Enable ARM-specific options only on ARM, and compilation of the app only on ARM
 UNAME := $(shell uname -m)
-PCPUI := $(shell cat /proc/cpuinfo | grep Revision | cut -c16-)
+# PCPUI := $(shell cat /proc/cpuinfo | grep Revision | cut -c16-)
+LSCPU := $(shell lscpu | grep "Model name" | awk '{print $$3}')
 
 # Determine the hardware platform. Below, pi1 stands for the RaspberryPi 1 (the original one),
 # and pi2 stands for both the RaspberryPi 2 and 3.
+# Update pi4 settings 
 ifeq ($(UNAME), armv6l)
 	CFLAGS = $(STD_CFLAGS) -march=armv6 -mtune=arm1176jzf-s -mfloat-abi=hard -mfpu=vfp -ffast-math -DRASPI=1
 	TARGET = pi1
-else ifeq ($(PCPUI), 11)
-	CFLAGS = $(STD_CFLAGS) -march=armv7-a -mtune=arm1176jzf-s -mfloat-abi=hard -mfpu=vfp -ffast-math -DRASPI=4
-	TARGET = pi4
 else ifeq ($(UNAME), armv7l)
 	CFLAGS = $(STD_CFLAGS) -march=armv7-a -mtune=arm1176jzf-s -mfloat-abi=hard -mfpu=vfp -ffast-math -DRASPI=2
 	TARGET = pi2
+else ifeq ($(UNAME), aarch64)
+	ifeq ($(LSCPU), Cortex-A72)
+		CFLAGS = $(STD_CFLAGS) -march=armv8-a -mtune=cortex-a72 -mfloat-abi=hard -mfpu=neon-fp-armv8 -ffast-math -DRASPI=4
+		TARGET = pi4
 else
 	CFLAGS = $(STD_CFLAGS)
 	TARGET = other
