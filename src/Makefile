@@ -19,6 +19,7 @@ else ifeq ($(UNAME), aarch64)
 	ifeq ($(LSCPU), Cortex-A72)
 		CFLAGS = $(STD_CFLAGS) -march=armv8-a -mtune=cortex-a72 -mfloat-abi=hard -mfpu=neon-fp-armv8 -ffast-math -DRASPI=4
 		TARGET = pi4
+	endif
 else
 	CFLAGS = $(STD_CFLAGS)
 	TARGET = other
