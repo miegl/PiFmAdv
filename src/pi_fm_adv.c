@@ -625,9 +625,9 @@ int tx(uint32_t carrier_freq, int divider, int prediv, char *audio_file, int rds
 
 		if(control_pipe) poll_control_pipe();
 
-		uint32_t cur_cb = (int)mem_phys_to_virt(dma_reg[DMA_CONBLK_AD]);
-		int last_sample = (last_cb - (int)mbox.virt_addr) / (sizeof(dma_cb_t) * 2);
-		int this_sample = (cur_cb - (int)mbox.virt_addr) / (sizeof(dma_cb_t) * 2);
+		size_t cur_cb = mem_phys_to_virt(dma_reg[DMA_CONBLK_AD]);
+		int last_sample = (last_cb - (size_t)mbox.virt_addr) / (sizeof(dma_cb_t) * 2);
+		int this_sample = (cur_cb - (size_t)mbox.virt_addr) / (sizeof(dma_cb_t) * 2);
 		int free_slots = this_sample - last_sample;
 
 		if (free_slots < 0)
@@ -658,7 +658,7 @@ int tx(uint32_t carrier_freq, int divider, int prediv, char *audio_file, int rds
 
 			free_slots -= SUBSIZE;
 		}
-		last_cb = (uint32_t)mbox.virt_addr + last_sample * sizeof(dma_cb_t) * 2;
+		last_cb = (size_t)mbox.virt_addr + last_sample * sizeof(dma_cb_t) * 2;
 		
 		if(samples_over_deviation) printf("Alert: %d samples over deviation\n", samples_over_deviation);
 
