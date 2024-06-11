@@ -15,7 +15,7 @@
 #include "rds.h"
 #include "control_pipe.h"
 
-#define CTL_BUFFER_SIZE 70
+#define CTL_BUFFER_SIZE 100
 
 int fd;
 FILE *f_ctl;
@@ -26,7 +26,7 @@ FILE *f_ctl;
 
 int open_control_pipe(char *filename) {
 	fd = open(filename, O_RDWR | O_NONBLOCK);
-	if(fd == -1) return -1;
+	if(fd < 0) return -1;
 
 	int flags;
 	flags = fcntl(fd, F_GETFL, 0);

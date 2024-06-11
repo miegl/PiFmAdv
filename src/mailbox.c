@@ -34,6 +34,8 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <stdint.h>
 #include <sys/mman.h>
 #include <sys/ioctl.h>
+#include <sys/stat.h>
+#include <sys/sysmacros.h>  // For makedev().
 
 #include "mailbox.h"
 
@@ -68,7 +70,7 @@ void *mapmem(unsigned base, unsigned size)
    return (char *)mem + offset;
 }
 
-void unmapmem(void *addr, unsigned size)
+void *unmapmem(void *addr, unsigned size)
 {
    const intptr_t offset = (intptr_t)addr % PAGE_SIZE;
    addr = (char *)addr - offset;
@@ -244,17 +246,44 @@ unsigned execute_qpu(int file_desc, unsigned num_qpus, unsigned control, unsigne
    return p[5];
 }
 
-int mbox_open() {
-   int file_desc;
+// int mbox_open() {
+//    int file_desc;
 
-   // open a char device file used for communicating with kernel mbox driver
-   file_desc = open(DEVICE_FILE_NAME, 0);
-   if (file_desc < 0) {
-      printf("Can't open device file: %s\n", DEVICE_FILE_NAME);
-      printf("Try creating a device file with: sudo mknod %s c %d 0\n", DEVICE_FILE_NAME, MAJOR_NUM);
-      exit(-1);
-   }
-   return file_desc;
+//    // open a char device file used for communicating with kernel mbox driver
+//    file_desc = open(DEVICE_FILE_NAME, 0);
+//    if (file_desc < 0) {
+//       printf("Can't open device file: %s\n", DEVICE_FILE_NAME);
+//       printf("Try creating a device file with: sudo mknod %s c %d 0\n", DEVICE_FILE_NAME, MAJOR_NUM);
+//       exit(-1);
+//    }
+//    return file_desc;
+// }
+int mbox_open() {
+    int file_desc;
+
+    // Open a char device file used for communicating with kernel mbox driver.
+    file_desc = open(DEVICE_FILE_NAME, 0);
+    if(file_desc >= 0) {
+        printf("Using mbox device " DEVICE_FILE_NAME ".\n");
+        return file_desc;
+    }
+
+    // Try to create one
+    unlink(LOCAL_DEVICE_FILE_NAME);
+    if(mknod(LOCAL_DEVICE_FILE_NAME, S_IFCHR|0600, makedev(MAJOR_NUM_A, 0)) >= 0 &&
+        (file_desc = open(LOCAL_DEVICE_FILE_NAME, 0)) >= 0) {
+        printf("Using local mbox device file with major %d.\n", MAJOR_NUM_A);
+        return file_desc;
+    }
+
+    unlink(LOCAL_DEVICE_FILE_NAME);
+    if(mknod(LOCAL_DEVICE_FILE_NAME, S_IFCHR|0600, makedev(MAJOR_NUM_B, 0)) >= 0 &&
+        (file_desc = open(LOCAL_DEVICE_FILE_NAME, 0)) >= 0) {
+        printf("Using local mbox device file with major %d.\n", MAJOR_NUM_B);
+        return file_desc;
+    }
+
+    return -1;
 }
 
 void mbox_close(int file_desc) {

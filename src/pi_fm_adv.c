@@ -5,6 +5,7 @@
     See https://github.com/Miegl/PiFmAdv
 */
 
+#include <locale.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
@@ -299,6 +300,9 @@ static void terminate(int num)
 {
     // Stop outputting and generating the clock.
     if (clk_reg && gpio_reg && mbox.virt_addr) {
+		// Set GPIO4 to be an output (instead of ALT FUNC 0, which is the clock).
+        gpio_reg[GPFSEL0] = (gpio_reg[GPFSEL0] & ~(7 << 12)) | (1 << 12);
+
         // Disable the clock generator.
         clk_reg[GPCLK_CNTL] = 0x5A;
         clk_reg[GPCLK_CNTL + GPCLK_STEP*1] = 0x5A;
@@ -343,16 +347,16 @@ static void warn(char *fmt, ...)
     va_end(ap);
 }
 
-static uint32_t mem_virt_to_phys(void *virt)
+static size_t mem_virt_to_phys(void *virt)
 {
-    uint32_t offset = (uint8_t *)virt - mbox.virt_addr;
+    size_t offset = (size_t)virt - (size_t)mbox.virt_addr;
 
     return mbox.bus_addr + offset;
 }
 
-static uint32_t mem_phys_to_virt(uint32_t phys)
+static size_t mem_phys_to_virt(size_t phys)
 {
-    return phys - (uint32_t)mbox.bus_addr + (uint32_t)mbox.virt_addr;
+    return (size_t) (phys - mbox.bus_addr + mbox.virt_addr);
 }
 
 static volatile void *map_peripheral(uint32_t base, uint32_t len)
@@ -373,8 +377,9 @@ static volatile void *map_peripheral(uint32_t base, uint32_t len)
 
 
 int tx(uint32_t carrier_freq, int divider, int prediv, char *audio_file, int rds, uint16_t pi, char *ps, char *rt, int *af_array, float ppm, float deviation, float mpx, int cutoff, int preemphasis_cutoff, char *control_pipe, int pty, int tp, int power, int pll, int gpclk, int *gpio, int wait, int srate, int nochan) {
-	// Catch only important signals
-	for (int i = 0; i < 25; i++) {
+	// Catch all signals possible - it is vital we kill the DMA engine
+    // on process exit!
+	for (int i = 0; i < 64; i++) {
 		struct sigaction sa;
 
 		memset(&sa, 0, sizeof(sa));
@@ -395,10 +400,11 @@ int tx(uint32_t carrier_freq, int divider, int prediv, char *audio_file, int rds
 	mbox.handle = mbox_open();
 	if (mbox.handle < 0)
 		fatal("Failed to open mailbox. Check kernel support for vcio / BCM2708 mailbox.\n");
-	printf("Allocating physical memory: size = %d, ", NUM_PAGES * PAGE_SIZE);
+	printf("Allocating physical memory: size = %zu, ", NUM_PAGES * PAGE_SIZE);
 	if(!(mbox.mem_ref = mem_alloc(mbox.handle, NUM_PAGES * PAGE_SIZE, PAGE_SIZE, MEM_FLAG))) {
 		fatal("Could not allocate memory.\n");
 	}
+	// TODO: How do we know that succeeded?
 	printf("mem_ref = %u, ", mbox.mem_ref);
 	if(!(mbox.bus_addr = mem_lock(mbox.handle, mbox.mem_ref))) {
 		fatal("Could not lock memory.\n");
@@ -562,7 +568,7 @@ int tx(uint32_t carrier_freq, int divider, int prediv, char *audio_file, int rds
 	dma_reg[DMA_CS] = BCM2708_DMA_PRIORITY(15) | BCM2708_DMA_PANIC_PRIORITY(15) | BCM2708_DMA_DISDEBUG | BCM2708_DMA_ACTIVE;
 
 
-	uint32_t last_cb = (uint32_t)ctl->cb;
+	size_t last_cb = (size_t)ctl->cb;
 
 	// Data structures for baseband data
 	double data[DATA_SIZE];
@@ -715,7 +721,7 @@ int main(int argc, char **argv) {
 	char *audio_file = NULL;
 	char *control_pipe = NULL;
 	uint32_t carrier_freq = 87600000;
-    	int rds = 1;
+    int rds = 1;
 	int alternative_freq[100] = {};
 	int af_size = 0;
 	char *ps = "PiFmAdv";
