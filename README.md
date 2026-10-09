@@ -1,6 +1,36 @@
 PiFmAdv
 =========
 
+> [!IMPORTANT]
+> **This project is archived and no longer maintained.** PiFmAdv has been superseded by
+> **[txengine](https://github.com/miegl/txengine)**, a from-scratch rewrite.
+> Please use txengine instead. Issues and pull requests in this repository will not be answered.
+
+## Why switch to txengine
+
+* **Current hardware.** txengine runs on the Raspberry Pi 2, 3, 4, 5 and Zero 2 W, as static 32-bit (armv7) or 64-bit (aarch64) binaries. It can also transmit from any Linux computer through a Raspberry Pi Pico or Pico 2 on USB. PiFmAdv does not support the Pi 5 (RP1) at all.
+* **Hardware-timed and checked output.** Samples go to the carrier synthesiser by DMA, paced by a hardware timer. Every register write is verified with lock and status bits, read-back and a frequency counter, so nothing relies on sleeping.
+* **Automatic frequency correction.** The crystal error is measured all the time against the system clock (NTP, or GPS through chrony) and corrected in the carrier, the subcarriers and the playback speed, and the correction follows temperature drift. In PiFmAdv you have to measure the error yourself with `pulses.wav` and Audacity and pass it as `--ppm`.
+* **A proper multiplex.** PiFmAdv adds the audio into the multiplex without a limiter, so a loud programme overmodulates. txengine has a pre-emphasis-aware look-ahead limiter that bounds the true composite peak, and it meters the MPX power (ITU-R BS.412). It also pre-compensates the frequency response of the output stage.
+* **Measured signal quality.** Signal quality was measured over the air with a USRP B210. Stereo separation is above 50 dB and RDS has 0 % block errors. On the Pi 5, audio THD is −91 dB and the frequency response is flat to ±0.03 dB from 31.5 Hz to 15 kHz.
+* **Simpler to build and feed.** txengine builds as a static musl binary with no C toolchain or system libraries. You build once per CPU architecture, not once per Pi model. It reads WAV, FLAC, MP3, OGG/Vorbis and AAC directly, with no SoX in front, and it compensates clock drift on live input.
+* **More RDS and better control.** On top of PiFmAdv's RDS fields, txengine adds PTYN, the RadioText A/B flag, MS, DI, ECC/LIC and the EBU Latin character set, and it sends clock time at the minute edge. You can control it at run time through a FIFO or a Unix socket, which covers far more than PS/RT/TA/PTY.
+* **Safe for the rest of the system.** txengine moves the clocks the rest of the Pi runs on by ±3 % at most, and it restores every register it touched on exit, even after `kill -9`.
+* **Testing without a transmitter.** `txengine wfm render` writes the multiplex to a WAV/IQ file, and `txengine wfm analyze` measures a recording (levels, pilot phase, RDS decode).
+
+Most PiFmAdv command lines carry over directly:
+
+```bash
+# PiFmAdv
+sudo ./pi_fm_adv --freq 87.6 --audio sound.wav --ps MYRADIO --rt 'Hello, world!' --ctl rds_ctl
+# txengine
+sudo txengine wfm tx -f 87.6 -a sound.wav --ps MYRADIO --rt 'Hello, world!' --ctl rds_ctl
+```
+
+See the [txengine README](https://github.com/miegl/txengine#readme) for build instructions and the full list of options.
+
+The original PiFmAdv documentation is kept below for reference.
+
 
 ## FM-RDS transmitter using the Raspberry Pi
 
